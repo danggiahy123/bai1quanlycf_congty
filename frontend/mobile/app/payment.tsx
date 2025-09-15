@@ -79,4 +79,3 @@ const styles = StyleSheet.create({
   qrImage: { width: 220, height: 220, borderRadius: 12 },
 });
 
-
