@@ -1,0 +1,5 @@
+Place your transfer QR image here as transfer-qr.png
+Suggested path: frontend/mobile/assets/images/transfer-qr.png
+In the app, it is referenced by require('@/assets/images/transfer-qr.png').
+
+

@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-export default function LoginScreen() {
+export default function IndexScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,10 +17,15 @@ export default function LoginScreen() {
     }
     try {
       setIsSubmitting(true);
-      // Fake wait to simulate API call
-      await new Promise((res) => setTimeout(res, 800));
-      Alert.alert('Đăng nhập thành công', `Xin chào, ${email}`);
-      router.replace('/');
+      await new Promise((res) => setTimeout(res, 400));
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedPassword = password.trim();
+      const isValid = normalizedEmail === 'staff@example.com' && normalizedPassword === '123456';
+      if (isValid) {
+        router.replace('/home');
+      } else {
+        Alert.alert('Sai thông tin', 'Email hoặc mật khẩu không đúng');
+      }
     } catch (e) {
       Alert.alert('Đăng nhập thất bại', 'Vui lòng thử lại');
     } finally {
@@ -72,10 +77,15 @@ export default function LoginScreen() {
 
         <View style={styles.footerRow}>
           <ThemedText>Chưa có tài khoản?</ThemedText>
-          <TouchableOpacity onPress={() => Alert.alert('Tính năng sắp có')}> 
+          <TouchableOpacity onPress={() => router.push('/register')}>
             <ThemedText type="link"> Đăng ký</ThemedText>
           </TouchableOpacity>
         </View>
+
+        <View style={{ height: 8 }} />
+        <TouchableOpacity onPress={() => router.replace('/home')}>
+          <ThemedText type="link">Vào trang chủ (thử nhanh)</ThemedText>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </ThemedView>
   );
@@ -91,6 +101,7 @@ const styles = StyleSheet.create({
   header: {
     gap: 4,
     marginBottom: 8,
+    alignItems: 'center',
   },
   fieldGroup: {
     gap: 6,
