@@ -6,6 +6,19 @@ import { Toaster, toast } from 'react-hot-toast';
 import AuthSimple from './components/AuthSimple';
 import PaymentsAdmin from './components/PaymentsAdmin';
 
+type TableHistoryEntry = {
+  _id: string;
+  tableId: string;
+  tableName: string;
+  action: 'OCCUPIED' | 'FREED' | 'PAID' | 'BOOKING_CONFIRMED' | 'BOOKING_CANCELLED';
+  performedBy: string; // User ID
+  performedByName: string; // User Full Name
+  customerName?: string;
+  bookingId?: string;
+  amount?: number;
+  createdAt: string;
+};
+
 type Menu = {
   _id: string;
   name: string;
@@ -15,7 +28,7 @@ type Menu = {
   available?: boolean;
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
 
 const emptyForm: Omit<Menu, '_id'> = {
   name: '',
@@ -203,6 +216,9 @@ export default function App() {
             <button onClick={() => setTab('payments')} className={`px-3 py-1.5 rounded-md border ${tab==='payments'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
               Thanh toán bàn
             </button>
+            <button onClick={() => setTab('history')} className={`px-3 py-1.5 rounded-md border ${tab==='history'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
+              Lịch sử bàn
+            </button>
           </nav>
           <input
             placeholder="Tìm theo tên/ghi chú..."
@@ -288,6 +304,8 @@ export default function App() {
           <CustomersAdmin />
         ) : tab==='payments' ? (
           <PaymentsAdmin />
+        ) : tab==='history' ? (
+          <TableHistoryAdmin />
         ) : (
           <BookingsAdmin stats={stats} onStatsChange={setStats} token={token} />
         )}
@@ -363,6 +381,16 @@ export default function App() {
   );
 }
 
+
+
+
+
+
+
+
+
+
+
 // --- Employees Admin ---
 type EmployeeData = { 
   _id: string; 
@@ -375,7 +403,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -533,6 +561,16 @@ function EmployeesAdmin() {
   );
 }
 
+
+
+
+
+
+
+
+
+
+
 // --- Customers Admin ---
 type CustomerData = { 
   _id: string; 
@@ -552,7 +590,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -770,6 +808,16 @@ function CustomersAdmin() {
   );
 }
 
+
+
+
+
+
+
+
+
+
+
 // --- Bookings Admin ---
 type BookingData = {
   _id: string;
@@ -819,7 +867,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -1093,7 +1141,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
                     <div>
-                      <span className="font-medium">Bàn:</span> {booking.table.name}
+                      <span className="font-medium">Bàn:</span> {booking.table?.name || 'N/A'}
                     </div>
                     <div>
                       <span className="font-medium">Số người:</span> {booking.numberOfGuests}
@@ -1122,7 +1170,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                 <div className="space-y-1">
                   {booking.menuItems.map((item, index) => (
                     <div key={index} className="flex justify-between text-sm">
-                      <span>{item.item.name} x{item.quantity}</span>
+                      <span>{item.item?.name || 'N/A'} x{item.quantity}</span>
                       <span className="font-medium">{(item.price * item.quantity).toLocaleString()}đ</span>
                     </div>
                   ))}
@@ -1199,14 +1247,24 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
   );
 }
 
+
+
+
+
+
+
+
+
+
+
 // --- Tables Admin ---
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');
+  const [filter, setFilter] = useState<'all'|'TRỐNG'|'ĐÃ ĐƯỢC ĐẶT'>('all');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Pick<Table,'name'|'note'>>({ name: '', note: '' });
   const [detailOpen, setDetailOpen] = useState(false);
@@ -1240,8 +1298,8 @@ function TablesAdmin() {
     await load();
   }
 
-  async function toggle(id: string, status: 'empty'|'occupied') {
-    if (status==='empty') await axios.post(`${API}/api/tables/${id}/occupy`);
+  async function toggle(id: string, status: 'TRỐNG'|'ĐÃ ĐƯỢC ĐẶT') {
+    if (status==='TRỐNG') await axios.post(`${API}/api/tables/${id}/occupy`);
     else await axios.post(`${API}/api/tables/${id}/free`);
     await load();
   }
@@ -1263,8 +1321,8 @@ function TablesAdmin() {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-          {(['all','empty','occupied'] as const).map(k => (
-            <button key={k} onClick={()=>setFilter(k)} className={`px-3 py-1.5 ${filter===k?'bg-red-600 text-white':'bg-white'}`}>{k==='all'?'Tất cả':k==='empty'?'Bàn trống':'Đang dùng'}</button>
+          {(['all','TRỐNG','ĐÃ ĐƯỢC ĐẶT'] as const).map(k => (
+            <button key={k} onClick={()=>setFilter(k)} className={`px-3 py-1.5 ${filter===k?'bg-red-600 text-white':'bg-white'}`}>{k==='all'?'Tất cả':k==='TRỐNG'?'Bàn trống':'Đang dùng'}</button>
           ))}
         </div>
         <button onClick={()=>setOpen(true)} className="ml-auto inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
@@ -1281,15 +1339,17 @@ function TablesAdmin() {
                   <div className="font-semibold">{t.name} <span className="text-gray-400">#{t._id}</span></div>
                   {t.note && <div className="text-sm text-gray-600">{t.note}</div>}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='empty'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
-                  {t.status==='empty'?'Bàn trống':'Đang dùng'}
+                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='TRỐNG'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
+                  {t.status==='TRỐNG'?'Bàn trống':'Đang dùng'}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-3">
                 <button onClick={()=>openDetails(t)} className="px-3 py-1.5 rounded-md border">Thông tin bàn</button>
-                <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border">
-                  {t.status==='empty'?'Nhận bàn':'Trả bàn'}
-                </button>
+                {t.status !== 'TRỐNG' && (
+                  <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border">
+                    {t.status==='empty'?'Nhận bàn':'Trả bàn'}
+                  </button>
+                )}
                 <button onClick={()=>remove(t._id)} className="ml-auto p-2 rounded hover:bg-gray-100">
                   <TrashIcon className="w-5 h-5 text-red-600" />
                 </button>
@@ -1362,5 +1422,15 @@ function TablesAdmin() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 

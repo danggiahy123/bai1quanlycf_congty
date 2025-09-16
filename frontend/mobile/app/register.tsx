@@ -5,7 +5,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.5.17:5000';
+import { DEFAULT_API_URL } from '@/constants/api';
+
+const API_URL = DEFAULT_API_URL;
 
 export default function RegisterScreen() {
   const router = useRouter();

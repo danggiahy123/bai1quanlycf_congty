@@ -5,12 +5,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
 import { useTables } from '@/components/tables-context';
+import { DEFAULT_API_URL } from '@/constants/api';
 
 export default function PaymentScreen() {
   const router = useRouter();
   const { state, totalAmount, clearOrder } = useOrder();
   const { freeTable } = useTables();
-  const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
+  
+  const API_URL = DEFAULT_API_URL;
   const [cash, setCash] = useState('');
   const [method, setMethod] = useState<'cash' | 'transfer'>('cash');
 

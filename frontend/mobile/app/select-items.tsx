@@ -6,12 +6,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
 import { TouchableOpacity as Btn } from 'react-native';
+import { DEFAULT_API_URL } from '@/constants/api';
 
 export default function SelectItemsScreen() {
   const router = useRouter();
   const { state, addItem, updateItemQuantity, removeItem, totalAmount } = useOrder();
 
-  const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
+  const API_URL = DEFAULT_API_URL;
   const [menu, setMenu] = useState<{ id: string; name: string; price: number; image?: string; note?: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);

@@ -16,7 +16,7 @@ import { ThemedView } from '@/components/themed-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_URL = 'http://192.168.5.17:5000';
+import { tryApiCall } from '@/constants/api';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -40,7 +40,7 @@ export default function LoginScreen() {
         ? '/api/customers/login' 
         : '/api/employees/login';
       
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      const result = await tryApiCall(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -51,9 +51,8 @@ export default function LoginScreen() {
         }),
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (result.success) {
+        const data = result.data;
         // Lưu thông tin đăng nhập
         await AsyncStorage.setItem('userToken', data.token);
         await AsyncStorage.setItem('userType', accountType);
@@ -63,7 +62,7 @@ export default function LoginScreen() {
           { text: 'OK', onPress: () => router.replace('/') }
         ]);
       } else {
-        Alert.alert('Lỗi', data.message || 'Đăng nhập thất bại');
+        Alert.alert('Lỗi', result.error || 'Đăng nhập thất bại');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -73,8 +72,8 @@ export default function LoginScreen() {
     }
   };
 
-  const quickTrial = () => {
-    router.replace('/');
+  const handleRegister = () => {
+    router.push('/register');
   };
 
   return (
@@ -196,14 +195,16 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Quick Trial */}
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={quickTrial}>
-              <ThemedText style={styles.quickTrialText}>
-                Vào trang chủ (thử nhanh)
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
+          {/* Footer - Show different options based on account type */}
+          {accountType === 'customer' && (
+            <View style={styles.footer}>
+              <TouchableOpacity onPress={handleRegister}>
+                <ThemedText style={styles.registerText}>
+                  Đăng ký
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          )}
         </ThemedView>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: 'center',
   },
-  quickTrialText: {
+  registerText: {
     fontSize: 14,
     color: '#3b82f6',
     textDecorationLine: 'underline',

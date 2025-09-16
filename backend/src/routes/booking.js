@@ -296,6 +296,28 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
       console.error('Lỗi gửi thông báo cho nhân viên:', notificationError);
     }
 
+    // Gửi thông báo cho admin về việc nhân viên xác nhận đặt bàn
+    try {
+      const admins = await Admin.find({});
+      
+      for (const admin of admins) {
+        const adminNotification = new Notification({
+          user: admin._id,
+          type: 'booking_confirmed',
+          title: 'Nhân viên đã xác nhận đặt bàn',
+          message: `NHÂN VIÊN ${req.user.fullName || 'Nhân viên'} đã xác nhận đặt bàn cho KHÁCH ${booking.customerInfo ? booking.customerInfo.fullName : 'N/A'} với thông tin: Bàn ${table ? table.name : 'N/A'}, ${booking.numberOfGuests} người, ${booking.bookingDate.toLocaleDateString('vi-VN')} ${booking.bookingTime}, Tổng: ${booking.totalAmount.toLocaleString('vi-VN')}đ`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await adminNotification.save();
+      }
+      
+      console.log(`Đã gửi thông báo cho ${admins.length} admin về việc nhân viên xác nhận đặt bàn`);
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo cho admin:', notificationError);
+    }
+
     res.json({
       message: 'Xác nhận booking thành công',
       booking: {

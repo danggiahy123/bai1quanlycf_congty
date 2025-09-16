@@ -11,6 +11,7 @@ const employeeRouter = require('./routes/employee');
 const customerRouter = require('./routes/customer');
 const bookingRouter = require('./routes/booking');
 const notificationRouter = require('./routes/notification');
+const tableHistoryRouter = require('./routes/tableHistory');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/employees', employeeRouter);
 app.use('/api/customers', customerRouter);
 app.use('/api/bookings', bookingRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api/table-history', tableHistoryRouter);
 
 // Removed /api/upload endpoint
 

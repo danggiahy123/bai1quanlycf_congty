@@ -6,7 +6,9 @@ import { ThemedView } from '@/components/themed-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-const API_URL = 'http://192.168.5.17:5000';
+import { DEFAULT_API_URL } from '@/constants/api';
+
+const API_URL = DEFAULT_API_URL;
 
 type UserType = 'customer' | 'employee';
 
@@ -292,52 +294,61 @@ export default function IndexScreen() {
               <ThemedText style={styles.emptyText}>Chưa có thông báo nào</ThemedText>
             </View>
           ) : (
-            <FlatList
-              data={notifications.slice(0, 3)} // Chỉ hiển thị 3 thông báo gần nhất
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.notificationCard,
-                    !item.isRead && styles.unreadCard
-                  ]}
-                  onPress={() => !item.isRead && markAsRead(item._id)}
-                >
-                  <View style={styles.notificationHeader}>
-                    <View style={styles.notificationIconContainer}>
-                      <Ionicons
-                        name="restaurant"
-                        size={20}
-                        color="#16a34a"
-                      />
-                    </View>
-                    <View style={styles.notificationContent}>
-                      <ThemedText style={styles.notificationTitle}>
-                        {item.title}
-                      </ThemedText>
-                      <ThemedText style={styles.notificationMessage}>
-                        {item.message}
-                      </ThemedText>
-                      {item.bookingId && (
-                        <View style={styles.bookingInfo}>
-                          <ThemedText style={styles.bookingText}>
-                            Bàn: {item.bookingId.table} | {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} {item.bookingId.bookingTime}
-                          </ThemedText>
-                          <ThemedText style={styles.bookingAmount}>
-                            {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
-                          </ThemedText>
-                        </View>
-                      )}
-                    </View>
-                    {!item.isRead && <View style={styles.unreadDot} />}
+            <>
+            {notifications.slice(0, 3).map((item) => (
+              <TouchableOpacity
+                key={item._id}
+                style={[
+                  styles.notificationCard,
+                  !item.isRead && styles.unreadCard
+                ]}
+                onPress={() => !item.isRead && markAsRead(item._id)}
+              >
+                <View style={styles.notificationHeader}>
+                  <View style={styles.notificationIconContainer}>
+                    <Ionicons
+                      name="restaurant"
+                      size={20}
+                      color="#16a34a"
+                    />
                   </View>
-                  <ThemedText style={styles.notificationTime}>
-                    {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-                  </ThemedText>
-                </TouchableOpacity>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
+                  <View style={styles.notificationContent}>
+                    <ThemedText style={styles.notificationTitle}>
+                      {item.title}
+                    </ThemedText>
+                    <ThemedText style={styles.notificationMessage}>
+                      {item.message}
+                    </ThemedText>
+                    {item.bookingId && (
+                      <View style={styles.bookingInfo}>
+                        <ThemedText style={styles.bookingText}>
+                          Bàn: {item.bookingId.table} | {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} {item.bookingId.bookingTime}
+                        </ThemedText>
+                        <ThemedText style={styles.bookingAmount}>
+                          {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
+                        </ThemedText>
+                        {/* Trạng thái đặt bàn */}
+                        {item.type === 'booking_pending' && (
+                          <View style={styles.statusContainer}>
+                            <ThemedText style={styles.pendingStatus}>ĐANG CHỜ XÁC NHẬN</ThemedText>
+                          </View>
+                        )}
+                        {item.type === 'booking_confirmed' && (
+                          <View style={styles.statusContainer}>
+                            <ThemedText style={styles.confirmedStatus}>BÀN ĐÃ ĐƯỢC DUYỆT</ThemedText>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                  {!item.isRead && <View style={styles.unreadDot} />}
+                </View>
+                <ThemedText style={styles.notificationTime}>
+                  {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+            </>
           )}
           
           {notifications.length > 3 && (
@@ -607,6 +618,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#16a34a',
+  },
+  statusContainer: {
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  pendingStatus: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#f59e0b',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  confirmedStatus: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#16a34a',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   unreadDot: {
     width: 8,

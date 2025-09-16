@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Table = require('../models/Table');
 const Notification = require('../models/Notification');
 const Booking = require('../models/Booking');
+const TableHistory = require('../models/TableHistory');
 
 const router = express.Router();
 
@@ -65,7 +66,20 @@ router.post('/by-table/:tableId/pay', async (req, res) => {
     await booking.save();
 
     // Free the table
-    await Table.findByIdAndUpdate(tableId, { status: 'TRỐNG' });
+    const table = await Table.findByIdAndUpdate(tableId, { status: 'TRỐNG' }, { new: true });
+
+    // Log table history for payment
+    const totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    await TableHistory.create({
+      tableId: table._id,
+      tableName: table.name,
+      action: 'PAID',
+      performedBy: req.user?.id || 'system',
+      performedByName: req.user?.fullName || 'System',
+      customerName: booking.customerInfo?.fullName || 'Khách hàng',
+      bookingId: booking._id,
+      amount: totalAmount
+    });
 
     // Send notification to customer if booking exists
     if (booking && booking.customer) {

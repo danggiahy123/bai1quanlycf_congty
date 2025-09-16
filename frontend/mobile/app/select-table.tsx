@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
 import { useTables } from '@/components/tables-context';
+import { DEFAULT_API_URL } from '@/constants/api';
 
 export default function SelectTableScreen() {
   const router = useRouter();
@@ -12,7 +13,7 @@ export default function SelectTableScreen() {
   const { isOccupied, occupyTable, isPending } = useTables();
   const params = useLocalSearchParams<{ mode?: string; numberOfGuests?: string }>();
 
-  const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
+  const API_URL = DEFAULT_API_URL;
   const [tables, setTables] = useState<{ id: string; name: string; status: 'empty' | 'occupied'; note?: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);

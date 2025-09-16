@@ -14,7 +14,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.5.17:5000';
+import { DEFAULT_API_URL } from '@/constants/api';
+
+const API_URL = DEFAULT_API_URL;
 
 interface Table {
   _id: string;
@@ -112,13 +114,12 @@ export default function EmployeePaymentsScreen() {
 
   const filteredTables = tables.filter(table => {
     if (filter === 'all') return true;
-    if (filter === 'unpaid') return table.status === 'occupied' && table.order?.status === 'pending';
+    if (filter === 'occupied') return table.status === 'occupied';
     if (filter === 'empty') return table.status === 'empty';
     return true;
   });
 
-  const occupiedTables = tables.filter(t => t.status === 'occupied' && t.order?.status === 'pending');
-  const totalRevenue = occupiedTables.reduce((sum, table) => sum + (table.order?.totalAmount || 0), 0);
+  const occupiedTables = tables.filter(t => t.status === 'occupied');
 
   const renderTable = ({ item }: { item: Table }) => (
     <View style={styles.tableCard}>
@@ -148,14 +149,29 @@ export default function EmployeePaymentsScreen() {
         </View>
       )}
 
-      {item.status === 'occupied' && item.order?.status === 'pending' && (
-        <TouchableOpacity
-          style={styles.payButton}
-          onPress={() => processPayment(item._id)}
-        >
-          <Ionicons name="card" size={20} color="#fff" />
-          <Text style={styles.payButtonText}>Thanh toán</Text>
-        </TouchableOpacity>
+      {item.status === 'occupied' && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.orderButton]}
+            onPress={() => {
+              // TODO: Navigate to order screen
+              Alert.alert('Chức năng', 'Order thêm món cho bàn ' + item.name);
+            }}
+          >
+            <Ionicons name="add-circle" size={16} color="#fff" />
+            <Text style={styles.actionButtonText}>ORDER THÊM</Text>
+          </TouchableOpacity>
+          
+          {item.order?.status === 'pending' && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.payButton]}
+              onPress={() => processPayment(item._id)}
+            >
+              <Ionicons name="card" size={16} color="#fff" />
+              <Text style={styles.actionButtonText}>THANH TOÁN</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
@@ -173,7 +189,7 @@ export default function EmployeePaymentsScreen() {
     <ThemedView style={styles.container}>
       <Stack.Screen 
         options={{ 
-          title: 'Thanh toán bàn',
+          title: 'Quản lý bàn khách',
           headerStyle: { backgroundColor: '#dc2626' },
           headerTintColor: '#fff',
         }} 
@@ -181,7 +197,7 @@ export default function EmployeePaymentsScreen() {
       
       {/* Filter Buttons */}
       <View style={styles.filterContainer}>
-        {['all', 'unpaid', 'empty'].map((filterType) => (
+        {['all', 'occupied', 'empty'].map((filterType) => (
           <TouchableOpacity
             key={filterType}
             style={[
@@ -195,7 +211,7 @@ export default function EmployeePaymentsScreen() {
               filter === filterType && styles.activeFilterText
             ]}>
               {filterType === 'all' ? 'Tất cả' : 
-               filterType === 'unpaid' ? 'Chưa thanh toán' : 'Bàn trống'}
+               filterType === 'occupied' ? 'Bàn có khách' : 'Bàn trống'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -208,13 +224,6 @@ export default function EmployeePaymentsScreen() {
           <View style={styles.statContent}>
             <Text style={styles.statNumber}>{occupiedTables.length}</Text>
             <Text style={styles.statLabel}>Bàn chưa thanh toán</Text>
-          </View>
-        </View>
-        <View style={styles.statCard}>
-          <Ionicons name="cash" size={24} color="#16a34a" />
-          <View style={styles.statContent}>
-            <Text style={styles.statNumber}>{totalRevenue.toLocaleString()}đ</Text>
-            <Text style={styles.statLabel}>Tổng doanh thu</Text>
           </View>
         </View>
       </View>
@@ -370,8 +379,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#dc2626',
   },
-  payButton: {
-    backgroundColor: '#dc2626',
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -379,9 +393,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  payButtonText: {
+  orderButton: {
+    backgroundColor: '#3b82f6',
+  },
+  payButton: {
+    backgroundColor: '#dc2626',
+  },
+  actionButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
   },
 });

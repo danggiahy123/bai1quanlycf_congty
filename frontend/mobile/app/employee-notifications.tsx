@@ -15,7 +15,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
+import { DEFAULT_API_URL } from '@/constants/api';
+
+const API_URL = DEFAULT_API_URL;
 
 interface Notification {
   _id: string;

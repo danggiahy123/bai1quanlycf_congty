@@ -14,7 +14,9 @@ import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.5.17:5000';
+import { DEFAULT_API_URL } from '@/constants/api';
+
+const API_URL = DEFAULT_API_URL;
 
 interface Booking {
   _id: string;
@@ -50,7 +52,7 @@ export default function EmployeeBookingsScreen() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/api/bookings`, {
+      const response = await fetch(`${API_URL}/api/bookings/admin?status=${filter}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -144,7 +146,7 @@ export default function EmployeeBookingsScreen() {
     <View style={styles.bookingCard}>
       <View style={styles.bookingHeader}>
         <ThemedText type="subtitle" style={styles.customerName}>
-          {item.customer.fullName}
+          {item.customer?.fullName || item.customerInfo?.fullName || 'Khách hàng'}
         </ThemedText>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
@@ -154,7 +156,7 @@ export default function EmployeeBookingsScreen() {
       <View style={styles.bookingInfo}>
         <View style={styles.infoRow}>
           <Ionicons name="restaurant" size={16} color="#6b7280" />
-          <ThemedText style={styles.infoText}>Bàn: {item.table.name}</ThemedText>
+          <ThemedText style={styles.infoText}>Bàn: {item.table?.name || 'N/A'}</ThemedText>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="people" size={16} color="#6b7280" />
@@ -168,7 +170,7 @@ export default function EmployeeBookingsScreen() {
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="call" size={16} color="#6b7280" />
-          <ThemedText style={styles.infoText}>{item.customer.phone}</ThemedText>
+          <ThemedText style={styles.infoText}>{item.customer?.phone || item.customerInfo?.phone || 'N/A'}</ThemedText>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="cash" size={16} color="#6b7280" />
@@ -177,26 +179,6 @@ export default function EmployeeBookingsScreen() {
       </View>
 
       <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.quickBookButton]}
-          onPress={() => {
-            Alert.alert(
-              'Đặt bàn ngay',
-              'Tính năng đặt bàn nhanh cho khách hàng',
-              [
-                { text: 'Hủy', style: 'cancel' },
-                { text: 'Đặt ngay', onPress: () => {
-                  // TODO: Implement quick booking
-                  Alert.alert('Thành công', 'Đã đặt bàn ngay cho khách');
-                }}
-              ]
-            );
-          }}
-        >
-          <Ionicons name="add-circle" size={16} color="#fff" />
-          <Text style={styles.actionButtonText}>ĐẶT BÀN NGAY</Text>
-        </TouchableOpacity>
-        
         {item.status === 'pending' && (
           <View style={styles.confirmCancelButtons}>
             <TouchableOpacity
@@ -204,7 +186,7 @@ export default function EmployeeBookingsScreen() {
               onPress={() => confirmBooking(item._id)}
             >
               <Ionicons name="checkmark" size={16} color="#fff" />
-              <Text style={styles.actionButtonText}>XÁC NHẬN BÀN</Text>
+              <Text style={styles.actionButtonText}>XÁC NHẬN ĐẶT</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionButton, styles.cancelButton]}
@@ -213,6 +195,17 @@ export default function EmployeeBookingsScreen() {
               <Ionicons name="close" size={16} color="#fff" />
               <Text style={styles.actionButtonText}>HUỶ</Text>
             </TouchableOpacity>
+          </View>
+        )}
+        
+        {item.status === 'confirmed' && (
+          <View style={styles.confirmedInfo}>
+            <ThemedText style={styles.confirmedText}>
+              Người xác nhận: {item.confirmedBy?.fullName || 'Nhân viên'}
+            </ThemedText>
+            <ThemedText style={styles.confirmedTime}>
+              Xác nhận lúc: {new Date(item.updatedAt).toLocaleString('vi-VN')}
+            </ThemedText>
           </View>
         )}
       </View>
@@ -270,12 +263,6 @@ export default function EmployeeBookingsScreen() {
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{bookings.filter(b => b.status === 'confirmed').length}</Text>
           <Text style={styles.statLabel}>Đã xác nhận</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>
-            {bookings.reduce((sum, b) => sum + b.totalAmount, 0).toLocaleString()}đ
-          </Text>
-          <Text style={styles.statLabel}>Tổng doanh thu</Text>
         </View>
       </View>
 
@@ -428,5 +415,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 12,
+  },
+  confirmedInfo: {
+    backgroundColor: '#f0fdf4',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#16a34a',
+  },
+  confirmedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16a34a',
+    marginBottom: 4,
+  },
+  confirmedTime: {
+    fontSize: 12,
+    color: '#6b7280',
   },
 });
