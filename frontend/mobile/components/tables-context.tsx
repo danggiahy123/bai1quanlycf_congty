@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from 'react';
+import { createContext, ReactNode, useContext, useMemo, useState, useCallback } from 'react';
 
 type TablesContextValue = {
   occupiedTableIds: Set<string>;
@@ -17,10 +17,10 @@ export function TablesProvider({ children }: { children: ReactNode }) {
   const [occupiedTableIds, setOccupiedTableIds] = useState<Set<string>>(new Set());
   const [pendingTableIds, setPendingTableIds] = useState<Set<string>>(new Set());
 
-  const occupyTable = (tableId: string) =>
-    setOccupiedTableIds((prev) => new Set(prev).add(tableId));
+  const occupyTable = useCallback((tableId: string) =>
+    setOccupiedTableIds((prev) => new Set(prev).add(tableId)), []);
 
-  const freeTable = (tableId: string) => {
+  const freeTable = useCallback((tableId: string) => {
     setOccupiedTableIds((prev) => {
       const next = new Set(prev);
       next.delete(tableId);
@@ -31,15 +31,15 @@ export function TablesProvider({ children }: { children: ReactNode }) {
       next.delete(tableId);
       return next;
     });
-  };
+  }, []);
 
-  const markPending = (tableId: string) => setPendingTableIds((prev) => new Set(prev).add(tableId));
-  const clearPending = (tableId: string) =>
+  const markPending = useCallback((tableId: string) => setPendingTableIds((prev) => new Set(prev).add(tableId)), []);
+  const clearPending = useCallback((tableId: string) =>
     setPendingTableIds((prev) => {
       const next = new Set(prev);
       next.delete(tableId);
       return next;
-    });
+    }), []);
 
   const value = useMemo<TablesContextValue>(
     () => ({
@@ -52,7 +52,7 @@ export function TablesProvider({ children }: { children: ReactNode }) {
       isOccupied: (id: string) => occupiedTableIds.has(id),
       isPending: (id: string) => pendingTableIds.has(id),
     }),
-    [occupiedTableIds, pendingTableIds]
+    [occupiedTableIds, pendingTableIds, occupyTable, freeTable, markPending, clearPending]
   );
 
   return <TablesContext.Provider value={value}>{children}</TablesContext.Provider>;

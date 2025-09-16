@@ -8,14 +8,24 @@ import { useTables } from '@/components/tables-context';
 
 export default function SelectTableScreen() {
   const router = useRouter();
-  const { state, setTable } = useOrder();
+  const { state, setTable, setGuests } = useOrder();
   const { isOccupied, occupyTable, isPending } = useTables();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; numberOfGuests?: string }>();
 
   const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
   const [tables, setTables] = useState<{ id: string; name: string; status: 'empty' | 'occupied'; note?: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Cập nhật numberOfGuests từ params
+  useEffect(() => {
+    if (params.numberOfGuests) {
+      const guests = parseInt(params.numberOfGuests);
+      if (!isNaN(guests) && guests > 0) {
+        setGuests(guests);
+      }
+    }
+  }, [params.numberOfGuests]);
 
   useEffect(() => {
     let mounted = true;
@@ -46,7 +56,10 @@ export default function SelectTableScreen() {
   }, [API_URL]);
 
   const select = async (id: string) => {
-    setTable(id);
+    const table = tables.find(t => t.id === id);
+    if (table) {
+      setTable({ id: table.id, name: table.name });
+    }
     try {
       await fetch(`${API_URL}/api/tables/${id}/occupy`, { method: 'POST' });
     } catch {}
@@ -65,7 +78,7 @@ export default function SelectTableScreen() {
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ title: 'Chọn bàn' }} />
-      <ThemedText>Số khách: {state.numberOfGuests}</ThemedText>
+      <ThemedText>Số khách: {params.numberOfGuests || state.numberOfGuests}</ThemedText>
       <View style={styles.grid}>
         {loading && <ThemedText>Đang tải...</ThemedText>}
         {!!error && <ThemedText>Không tải được danh sách bàn: {error}</ThemedText>}
@@ -76,7 +89,7 @@ export default function SelectTableScreen() {
               <TouchableOpacity disabled={occupied} onPress={() => select(t.id)}>
                 <ThemedText type="defaultSemiBold">{t.name}</ThemedText>
               </TouchableOpacity>
-              <ThemedText>{isPending(t.id) ? 'CHỜ THANH TOÁN' : occupied ? 'Đang dùng (chưa thanh toán)' : 'Trống'}</ThemedText>
+              <ThemedText>{occupied ? 'Đã được đặt' : 'Trống'}</ThemedText>
               {occupied && (
                 <View style={{ width: '100%', marginTop: 6 }}>
                   <TouchableOpacity style={[styles.fullBtn, styles.addOrderBtn]} onPress={() => { setTable(t.id); router.push('/select-items'); }}>
@@ -100,8 +113,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 },
   table: { width: '47%', borderWidth: StyleSheet.hairlineWidth, borderColor: '#aaa', borderRadius: 10, padding: 12, alignItems: 'center', gap: 6 },
   fullBtn: { width: '100%' },
-  addOrderBtn: { backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 8 },
-  payNowBtn: { backgroundColor: '#16a34a', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8 },
+  addOrderBtn: { backgroundColor: '#16a34a', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginBottom: 8 },
+  payNowBtn: { backgroundColor: '#22c55e', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8 },
   busy: { opacity: 0.4 },
 });
 

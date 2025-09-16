@@ -63,7 +63,7 @@ router.delete('/:id', async (req, res) => {
 // Mark table as occupied
 router.post('/:id/occupy', async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'occupied' }, { new: true });
+    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'ĐÃ ĐƯỢC ĐẶT' }, { new: true });
     res.json(table);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -73,7 +73,7 @@ router.post('/:id/occupy', async (req, res) => {
 // Mark table as empty
 router.post('/:id/free', async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'empty' }, { new: true });
+    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'TRỐNG' }, { new: true });
     res.json(table);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -81,6 +81,7 @@ router.post('/:id/free', async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
