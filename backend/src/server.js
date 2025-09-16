@@ -5,6 +5,8 @@ const cors = require('cors');
 // Removed upload support to keep API simple (use external image URLs)
 
 const menuRouter = require('./routes/menu');
+const tableRouter = require('./routes/table');
+const orderRouter = require('./routes/order');
 
 const app = express();
 
@@ -17,6 +19,8 @@ app.use(express.json());
 
 // Routes
 app.use('/api/menu', menuRouter);
+app.use('/api/tables', tableRouter);
+app.use('/api/orders', orderRouter);
 
 // Removed /api/upload endpoint
 
