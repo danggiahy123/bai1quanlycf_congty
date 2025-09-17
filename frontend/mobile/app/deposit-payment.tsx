@@ -194,13 +194,58 @@ export default function DepositPaymentScreen() {
       } else {
         setCheckingPayment(false);
         setPaymentStatus('pending');
-        Alert.alert('Lỗi', '❌ ' + (result.error || 'Lỗi khi kiểm tra thanh toán'));
+        Alert.alert('Thông báo', '❌ ' + (result.error || 'Chưa phát hiện thanh toán. Vui lòng thử lại sau khi chuyển khoản.'));
       }
     } catch (error) {
       console.error('Error checking payment:', error);
       setCheckingPayment(false);
       setPaymentStatus('pending');
       Alert.alert('Lỗi', '❌ Lỗi kết nối khi kiểm tra thanh toán');
+    }
+  };
+
+  // Xác nhận thanh toán thủ công (admin)
+  const confirmPaymentManually = async () => {
+    try {
+      setCheckingPayment(true);
+      setPaymentStatus('checking');
+      
+      Alert.alert('Thông báo', '🔧 Đang xác nhận thanh toán thủ công...');
+      
+      const result = await tryApiCall('/api/payment/confirm-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: params.bookingId,
+          amount: paymentInfo.amount,
+          transactionType: 'deposit'
+        })
+      });
+
+      if (result.success) {
+        // Thành công - xác nhận thanh toán cọc
+        setPaymentStatus('paid');
+        setCheckingPayment(false);
+        Alert.alert('Thành công', '✅ ĐÃ XÁC NHẬN THANH TOÁN! Bàn đã được cọc.');
+        
+        // Gọi API xác nhận thanh toán cọc
+        await confirmDepositPaymentAPI();
+        
+        setTimeout(() => {
+          router.replace('/');
+        }, 2000);
+      } else {
+        setCheckingPayment(false);
+        setPaymentStatus('pending');
+        Alert.alert('Lỗi', '❌ ' + (result.error || 'Lỗi khi xác nhận thanh toán'));
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      setCheckingPayment(false);
+      setPaymentStatus('pending');
+      Alert.alert('Lỗi', '❌ Lỗi kết nối khi xác nhận thanh toán');
     }
   };
 
@@ -367,11 +412,12 @@ export default function DepositPaymentScreen() {
                   </TouchableOpacity>
                   
                   <TouchableOpacity
-                    onPress={confirmDepositPayment}
-                    style={styles.confirmButton}
+                    onPress={confirmPaymentManually}
+                    disabled={checkingPayment}
+                    style={[styles.confirmButton, checkingPayment && styles.buttonDisabled]}
                   >
                     <ThemedText style={styles.confirmButtonText}>
-                      ✅ XÁC NHẬN THỦ CÔNG
+                      {checkingPayment ? '🔧 ĐANG XÁC NHẬN...' : '🔧 XÁC NHẬN THANH TOÁN THỦ CÔNG'}
                     </ThemedText>
                   </TouchableOpacity>
                   

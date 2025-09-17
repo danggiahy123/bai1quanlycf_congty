@@ -5,9 +5,11 @@ import { PencilSquareIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outli
 import { Toaster, toast } from 'react-hot-toast';
 import AuthSimple from './components/AuthSimple';
 import PaymentsAdmin from './components/PaymentsAdmin';
-import PaymentAdmin from './components/PaymentAdmin';
 import DepositPaymentModal from './components/DepositPaymentModal';
 import TransactionHistory from './components/TransactionHistory';
+import InventoryManagement from './components/InventoryManagement';
+import Dashboard from './components/Dashboard';
+import { useSocket } from './hooks/useSocket';
 
 type TableHistoryEntry = {
   _id: string;
@@ -32,7 +34,7 @@ type Menu = {
   size?: string;
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Axios interceptor để xử lý lỗi 401
 axios.interceptors.response.use(
@@ -76,6 +78,9 @@ export default function App() {
   const [form, setForm] = useState<Omit<Menu, '_id'>>(emptyForm);
   const [q, setQ] = useState('');
   const [stats, setStats] = useState<{pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null>(null);
+  
+  // Socket.IO hook
+  const { socket, isConnected } = useSocket();
 
   // Kiểm tra token trong localStorage khi khởi động
   useEffect(() => {
@@ -86,6 +91,71 @@ export default function App() {
       setUser(JSON.parse(savedUser));
     }
   }, []);
+
+  // Socket.IO real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTableStatusChange = (data: any) => {
+      console.log('🔄 Table status changed:', data);
+      toast.success(`Bàn ${data.tableName} đã ${data.status === 'occupied' ? 'được đặt' : 'trống'}`);
+      // Refresh tables data if on tables tab
+      if (tab === 'tables') {
+        loadTables();
+      }
+    };
+
+    const handleBookingStatusChange = (data: any) => {
+      console.log('📅 Booking status changed:', data);
+      toast.success(`Booking ${data.bookingId} đã ${data.status}`);
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleOrderStatusChange = (data: any) => {
+      console.log('🛒 Order status changed:', data);
+      toast.success(`Đơn hàng bàn ${data.tableName} đã ${data.status}`);
+      // Refresh orders data if on payments tab
+      if (tab === 'payments' || tab === 'payment') {
+        loadPayments();
+      }
+    };
+
+    const handlePaymentStatusChange = (data: any) => {
+      console.log('💳 Payment status changed:', data);
+      toast.success(`Thanh toán bàn ${data.tableName} thành công: ${data.amount?.toLocaleString()}đ`);
+      // Refresh payments data
+      if (tab === 'payments' || tab === 'payment') {
+        loadPayments();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleNewNotification = (data: any) => {
+      console.log('🔔 New notification:', data);
+      toast.info(data.title || 'Thông báo mới');
+    };
+
+    // Listen for real-time events
+    socket.on('table_status_changed', handleTableStatusChange);
+    socket.on('booking_status_changed', handleBookingStatusChange);
+    socket.on('order_status_changed', handleOrderStatusChange);
+    socket.on('payment_status_changed', handlePaymentStatusChange);
+    socket.on('new_notification', handleNewNotification);
+
+    return () => {
+      socket.off('table_status_changed', handleTableStatusChange);
+      socket.off('booking_status_changed', handleBookingStatusChange);
+      socket.off('order_status_changed', handleOrderStatusChange);
+      socket.off('payment_status_changed', handlePaymentStatusChange);
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [socket, tab]);
 
   const handleLogin = (employee: Employee, authToken: string) => {
     setUser(employee);
@@ -224,11 +294,32 @@ export default function App() {
             <span className="text-green-500">Water</span>
             <span className="text-gray-300">DG</span>
           </h1>
+          {/* Connection Status */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span className="text-xs text-gray-400">
+              {isConnected ? 'Real-time Connected' : 'Disconnected'}
+            </span>
+          </div>
         </div>
         
         {/* Navigation */}
         <nav className="mt-6 px-3 pb-24">
           <div className="space-y-1">
+            <button 
+              onClick={() => setTab('dashboard')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'dashboard' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Dashboard
+            </button>
+            
             <button 
               onClick={() => setTab('menu')} 
               className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
@@ -318,32 +409,19 @@ export default function App() {
               THANH TOÁN NGAY
             </button>
             
-            <button 
-              onClick={() => setTab('payment')} 
-              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
-                tab === 'payment' 
-                  ? 'bg-green-600 text-white shadow-lg' 
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              VietQR
-            </button>
             
             <button 
-              onClick={() => setTab('history')} 
+              onClick={() => setTab('inventory')} 
               className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
-                tab === 'history' 
+                tab === 'inventory' 
                   ? 'bg-green-600 text-white shadow-lg' 
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
             >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
-              Lịch sử bàn
+              Quản lý kho
             </button>
             
             <button 
@@ -390,14 +468,14 @@ export default function App() {
         <div className="bg-gray-900 border-b border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white capitalize">
+              {tab === 'dashboard' && 'Dashboard'}
               {tab === 'menu' && 'Quản lý Món ăn'}
               {tab === 'tables' && 'Quản lý Bàn'}
               {tab === 'employees' && 'Quản lý Nhân viên'}
               {tab === 'customers' && 'Quản lý Khách hàng'}
               {tab === 'bookings' && 'Quản lý Đặt bàn'}
               {tab === 'payments' && 'THANH TOÁN NGAY'}
-              {tab === 'payment' && 'VietQR'}
-              {tab === 'history' && 'Lịch sử Bàn'}
+              {tab === 'inventory' && 'Quản lý Kho hàng'}
               {tab === 'transactions' && 'Lịch sử Giao dịch'}
             </h2>
             
@@ -428,7 +506,9 @@ export default function App() {
 
         {/* Main Content Area */}
         <div className="flex-1 bg-gray-900 p-6 overflow-y-auto">
-        {tab==='menu' ? (
+        {tab==='dashboard' ? (
+          <Dashboard API={API} token={token} />
+        ) : tab==='menu' ? (
           loading ? (
             <div className="flex flex-col items-center justify-center py-16">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mb-4"></div>
@@ -542,13 +622,8 @@ export default function App() {
           <CustomersAdmin />
         ) : tab==='payments' ? (
           <PaymentsAdmin />
-        ) : tab==='payment' ? (
-          <PaymentAdmin API={API} />
-        ) : tab==='history' ? (
-          <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">Lịch sử bàn</h2>
-            <p className="text-gray-300">Tính năng đang được phát triển...</p>
-          </div>
+        ) : tab==='inventory' ? (
+          <InventoryManagement API={API} token={token} />
         ) : tab==='transactions' ? (
           <TransactionHistory API={API} />
         ) : (
@@ -649,7 +724,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -836,7 +911,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1114,7 +1189,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -2156,7 +2231,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');
@@ -2166,6 +2241,9 @@ function TablesAdmin() {
   const [detailFor, setDetailFor] = useState<Table | null>(null);
   const [detailOrder, setDetailOrder] = useState<{ items: { name: string; price: number; quantity: number }[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
 
   async function load() {
     setLoading(true);
@@ -2376,7 +2454,6 @@ function TablesAdmin() {
       </Dialog>
 
       {/* Payment Method Modal */}
-      {console.log('showPaymentMethodModal:', showPaymentMethodModal)}
       <Dialog open={showPaymentMethodModal} onClose={() => setShowPaymentMethodModal(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">

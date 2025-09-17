@@ -1,29 +1,32 @@
 import { Stack } from 'expo-router';
 import { OrderProvider } from '@/components/order-context';
 import { TablesProvider } from '@/components/tables-context';
+import { SocketProvider } from '@/components/socket-context';
 
 export default function RootLayout() {
   return (
-    <TablesProvider>
-      <OrderProvider>
-        <Stack>
-          <Stack.Screen name="index" options={{ title: 'Đăng nhập' }} />
-          <Stack.Screen name="register" options={{ title: 'Đăng ký' }} />
-          <Stack.Screen name="register-info" options={{ title: 'Thông tin đăng ký' }} />
-          <Stack.Screen name="home" options={{ title: 'Trang chủ' }} />
-          <Stack.Screen name="select-guests" options={{ title: 'Chọn số khách' }} />
-          <Stack.Screen name="select-table" options={{ title: 'Chọn bàn' }} />
-          <Stack.Screen name="select-items" options={{ title: 'Chọn món' }} />
-          <Stack.Screen name="select-datetime" options={{ title: 'Chọn ngày giờ' }} />
-          <Stack.Screen name="select-deposit" options={{ title: 'Chọn cọc' }} />
-          <Stack.Screen name="order-confirm" options={{ title: 'Xác nhận đặt bàn' }} />
-          <Stack.Screen name="booking-confirm" options={{ title: 'Xác nhận booking' }} />
-          <Stack.Screen name="payment" options={{ title: 'Thanh toán QR' }} />
-          <Stack.Screen name="booking-success" options={{ headerShown: false }} />
-          <Stack.Screen name="payment-success" options={{ headerShown: false }} />
-        </Stack>
-      </OrderProvider>
-    </TablesProvider>
+    <SocketProvider>
+      <TablesProvider>
+        <OrderProvider>
+          <Stack>
+            <Stack.Screen name="index" options={{ title: 'Đăng nhập' }} />
+            <Stack.Screen name="register" options={{ title: 'Đăng ký' }} />
+            <Stack.Screen name="register-info" options={{ title: 'Thông tin đăng ký' }} />
+            <Stack.Screen name="home" options={{ title: 'Trang chủ' }} />
+            <Stack.Screen name="select-guests" options={{ title: 'Chọn số khách' }} />
+            <Stack.Screen name="select-table" options={{ title: 'Chọn bàn' }} />
+            <Stack.Screen name="select-items" options={{ title: 'Chọn món' }} />
+            <Stack.Screen name="select-datetime" options={{ title: 'Chọn ngày giờ' }} />
+            <Stack.Screen name="select-deposit" options={{ title: 'Chọn cọc' }} />
+            <Stack.Screen name="order-confirm" options={{ title: 'Xác nhận đặt bàn' }} />
+            <Stack.Screen name="booking-confirm" options={{ title: 'Xác nhận booking' }} />
+            <Stack.Screen name="payment" options={{ title: 'Thanh toán QR' }} />
+            <Stack.Screen name="booking-success" options={{ headerShown: false }} />
+            <Stack.Screen name="payment-success" options={{ headerShown: false }} />
+          </Stack>
+        </OrderProvider>
+      </TablesProvider>
+    </SocketProvider>
   );
 }
 

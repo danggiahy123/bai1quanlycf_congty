@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
 import { useTables } from '@/components/tables-context';
+import { useSocket } from '@/components/socket-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_API_URL } from '@/constants/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ export default function SelectTableScreen() {
   const router = useRouter();
   const { state, setTable, setGuests } = useOrder();
   const { isOccupied, occupyTable, isPending } = useTables();
+  const { socket, isConnected } = useSocket();
   const params = useLocalSearchParams<{ mode?: string; numberOfGuests?: string }>();
 
   const API_URL = DEFAULT_API_URL;
@@ -92,6 +94,61 @@ export default function SelectTableScreen() {
     };
   }, [API_URL]);
 
+  // Socket.IO real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTableStatusChange = (data: any) => {
+      console.log('🔄 Table status changed:', data);
+      setTables(prevTables => 
+        prevTables.map(table => 
+          table.id === data.tableId 
+            ? { ...table, status: data.status }
+            : table
+        )
+      );
+    };
+
+    const handleBookingStatusChange = (data: any) => {
+      console.log('📅 Booking status changed:', data);
+      // Update table status if booking affects table
+      if (data.tableId) {
+        setTables(prevTables => 
+          prevTables.map(table => 
+            table.id === data.tableId 
+              ? { ...table, status: data.status === 'confirmed' ? 'occupied' : 'empty' }
+              : table
+          )
+        );
+      }
+    };
+
+    const handleOrderStatusChange = (data: any) => {
+      console.log('🛒 Order status changed:', data);
+      // Update table status based on order
+      if (data.tableId) {
+        setTables(prevTables => 
+          prevTables.map(table => 
+            table.id === data.tableId 
+              ? { ...table, status: data.status === 'paid' ? 'empty' : 'occupied' }
+              : table
+          )
+        );
+      }
+    };
+
+    // Listen for real-time events
+    socket.on('table_status_changed', handleTableStatusChange);
+    socket.on('booking_status_changed', handleBookingStatusChange);
+    socket.on('order_status_changed', handleOrderStatusChange);
+
+    return () => {
+      socket.off('table_status_changed', handleTableStatusChange);
+      socket.off('booking_status_changed', handleBookingStatusChange);
+      socket.off('order_status_changed', handleOrderStatusChange);
+    };
+  }, [socket]);
+
   // Helper functions
   const getLocationIcon = (location: string) => {
     switch (location) {
@@ -153,9 +210,20 @@ export default function SelectTableScreen() {
       <Stack.Screen options={{ title: 'Chọn bàn' }} />
       
       <View style={styles.header}>
-        <ThemedText style={styles.guestsText}>
-          Số khách: {params.numberOfGuests || state.numberOfGuests}
-        </ThemedText>
+        <View style={styles.headerTop}>
+          <ThemedText style={styles.guestsText}>
+            Số khách: {params.numberOfGuests || state.numberOfGuests}
+          </ThemedText>
+          <View style={styles.connectionStatus}>
+            <View style={[
+              styles.statusDot, 
+              { backgroundColor: isConnected ? '#16a34a' : '#ef4444' }
+            ]} />
+            <ThemedText style={styles.statusText}>
+              {isConnected ? 'Kết nối real-time' : 'Mất kết nối'}
+            </ThemedText>
+          </View>
+        </View>
         {state.selectedTable && (
           <ThemedText style={styles.selectedTableText}>
             Đã chọn: {state.selectedTable.name}
@@ -293,11 +361,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   guestsText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 4,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   selectedTableText: {
     fontSize: 14,

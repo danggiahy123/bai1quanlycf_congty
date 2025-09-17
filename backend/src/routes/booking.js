@@ -136,6 +136,25 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await booking.save();
 
+    // Emit Socket.IO event for new booking
+    const io = req.app.get('io');
+    if (io) {
+      io.to('employees').emit('booking_status_changed', {
+        bookingId: booking._id,
+        tableId: booking.table,
+        tableName: table.name,
+        customerId: booking.customer,
+        customerName: booking.customerInfo?.fullName || 'N/A',
+        status: 'pending',
+        numberOfGuests: booking.numberOfGuests,
+        bookingDate: booking.bookingDate,
+        bookingTime: booking.bookingTime,
+        totalAmount: booking.totalAmount,
+        depositAmount: booking.depositAmount,
+        timestamp: new Date()
+      });
+    }
+
     // KHÔNG gửi thông báo ngay khi tạo booking có cọc
     // Thông báo chỉ được gửi sau khi cọc thành công
     console.log('Booking đã được tạo, chờ thanh toán cọc để gửi thông báo');
@@ -248,6 +267,19 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
     if (table) {
       table.status = 'occupied';
       await table.save();
+      
+      // Emit Socket.IO event for table status change
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('table_status_changed', {
+          tableId: table._id,
+          tableName: table.name,
+          status: 'occupied',
+          bookingId: booking._id,
+          customerName: booking.customerInfo?.fullName || 'N/A',
+          timestamp: new Date()
+        });
+      }
     }
 
     // Tạo lịch sử giao dịch nếu có cọc tiền

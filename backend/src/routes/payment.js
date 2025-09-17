@@ -105,7 +105,7 @@ router.post('/check-payment', async (req, res) => {
       });
     }
 
-    // Tìm booking (cho phép bookingId không tồn tại để demo)
+    // Tìm booking
     let booking = null;
     try {
       booking = await Booking.findById(bookingId);
@@ -113,21 +113,135 @@ router.post('/check-payment', async (req, res) => {
       console.log('Booking không tồn tại, tiếp tục demo mode');
     }
 
-    // Luôn trả về thành công để demo (trong thực tế sẽ gọi API ngân hàng)
-    console.log('✅ Trả về kết quả thành công cho demo');
-    res.json({
-      success: true,
-      message: 'Thanh toán đã được xác nhận',
-      data: {
+    // Kiểm tra xem đã có giao dịch thanh toán thành công chưa
+    try {
+      console.log('🔍 Tìm kiếm giao dịch với:', { bookingId, transactionType, amount });
+      
+      // Tìm tất cả giao dịch với bookingId này để debug
+      const allTransactions = await TransactionHistory.find({
+        bookingId: bookingId
+      });
+      console.log('🔍 Tất cả giao dịch với bookingId:', allTransactions.length);
+      
+      // Tìm giao dịch chính xác với bookingId, transactionType, status và amount
+      const existingTransaction = await TransactionHistory.findOne({
+        bookingId: bookingId,
+        transactionType: transactionType,
         status: 'completed',
-        message: 'ĐÃ NHẬN THẤY THANH TOÁN'
+        amount: amount
+      });
+
+      console.log('🔍 Kết quả tìm kiếm:', existingTransaction ? 'Tìm thấy' : 'Không tìm thấy');
+      
+      // Nếu không tìm thấy giao dịch chính xác, trả về false
+      if (!existingTransaction) {
+        console.log('❌ Không tìm thấy giao dịch thanh toán thành công');
+        return res.json({
+          success: false,
+          message: 'Chưa phát hiện thanh toán',
+          data: {
+            status: 'pending',
+            message: 'CHƯA CÓ THANH TOÁN'
+          }
+        });
       }
-    });
+
+      // Nếu tìm thấy giao dịch
+      console.log('✅ Đã tìm thấy giao dịch thanh toán thành công:', existingTransaction._id);
+      return res.json({
+        success: true,
+        message: 'Thanh toán đã được xác nhận',
+        data: {
+          status: 'completed',
+          message: 'ĐÃ NHẬN THẤY THANH TOÁN',
+          transactionId: existingTransaction._id
+        }
+      });
+    } catch (error) {
+      console.log('Lỗi kiểm tra giao dịch:', error.message);
+      return res.json({
+        success: false,
+        message: 'Lỗi khi kiểm tra thanh toán',
+        data: {
+          status: 'error',
+          message: 'LỖI KIỂM TRA'
+        }
+      });
+    }
+
   } catch (error) {
     console.error('Error checking payment:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Lỗi khi kiểm tra thanh toán' 
+    });
+  }
+});
+
+// API để admin xác nhận thanh toán thủ công (simulate việc nhận tiền)
+router.post('/confirm-payment', async (req, res) => {
+  try {
+    const { bookingId, amount, transactionType = 'deposit' } = req.body;
+
+    console.log('🔧 Admin xác nhận thanh toán thủ công:', { bookingId, amount, transactionType });
+
+    if (!bookingId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thiếu thông tin booking hoặc số tiền'
+      });
+    }
+
+    // Tìm booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy booking'
+      });
+    }
+
+    // Tạo giao dịch thanh toán thành công
+    const transaction = new TransactionHistory({
+      bookingId: booking._id,
+      tableId: booking.table,
+      tableName: `Bàn ${booking.table}`,
+      customerId: booking.customer,
+      customerInfo: booking.customerInfo,
+      transactionType: transactionType,
+      amount: amount,
+      paymentMethod: 'qr_code',
+      status: 'completed',
+      bankInfo: {
+        accountNumber: '2246811357',
+        accountName: 'DANG GIA HY',
+        bankName: 'Techcombank',
+        bankCode: '970407'
+      },
+      transactionId: 'TXN_' + Date.now(),
+      paidAt: new Date(),
+      confirmedAt: new Date(),
+      processedBy: 'admin',
+      processedByName: 'Admin',
+      notes: `Thanh toán ${transactionType === 'deposit' ? 'cọc' : 'đơn hàng'} bàn ${booking.table} - Xác nhận thủ công`
+    });
+
+    await transaction.save();
+    console.log('✅ Đã tạo giao dịch thanh toán thành công:', transaction._id);
+
+    res.json({
+      success: true,
+      message: 'Đã xác nhận thanh toán thành công',
+      data: {
+        transactionId: transaction._id,
+        status: 'completed'
+      }
+    });
+  } catch (error) {
+    console.error('Error confirming payment:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi khi xác nhận thanh toán' 
     });
   }
 });

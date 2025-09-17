@@ -151,7 +151,7 @@ const DepositPaymentModal: React.FC<DepositPaymentModalProps> = ({
         } else {
           setCheckingPayment(false);
           setPaymentStatus('pending');
-          toast.error('❌ ' + (data.message || 'Lỗi khi kiểm tra thanh toán'));
+          toast.error('❌ ' + (data.message || 'Chưa phát hiện thanh toán'));
         }
       } else {
         setCheckingPayment(false);
@@ -163,6 +163,60 @@ const DepositPaymentModal: React.FC<DepositPaymentModalProps> = ({
       setCheckingPayment(false);
       setPaymentStatus('pending');
       toast.error('❌ Lỗi kết nối khi kiểm tra thanh toán');
+    }
+  };
+
+  // Xác nhận thanh toán thủ công (admin)
+  const confirmPaymentManually = async () => {
+    try {
+      setCheckingPayment(true);
+      setPaymentStatus('checking');
+      
+      toast.success('🔧 Đang xác nhận thanh toán thủ công...');
+      
+      const response = await fetch(`${API}/api/payment/confirm-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: bookingId,
+          amount: depositAmount,
+          transactionType: 'deposit'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success) {
+          // Thành công - xác nhận thanh toán cọc
+          setPaymentStatus('paid');
+          setCheckingPayment(false);
+          toast.success('✅ ĐÃ XÁC NHẬN THANH TOÁN! Bàn đã được cọc.');
+          
+          // Gọi API xác nhận thanh toán cọc
+          await confirmDepositPaymentAPI();
+          
+          setTimeout(() => {
+            onDepositSuccess();
+            onClose();
+          }, 2000);
+        } else {
+          setCheckingPayment(false);
+          setPaymentStatus('pending');
+          toast.error('❌ ' + (data.message || 'Lỗi khi xác nhận thanh toán'));
+        }
+      } else {
+        setCheckingPayment(false);
+        setPaymentStatus('pending');
+        toast.error('❌ Lỗi khi xác nhận thanh toán');
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      setCheckingPayment(false);
+      setPaymentStatus('pending');
+      toast.error('❌ Lỗi kết nối khi xác nhận thanh toán');
     }
   };
 
@@ -314,10 +368,11 @@ const DepositPaymentModal: React.FC<DepositPaymentModalProps> = ({
                           {checkingPayment ? '🔍 ĐANG KIỂM TRA...' : '🔍 KIỂM TRA THANH TOÁN TỰ ĐỘNG'}
                         </button>
                         <button
-                          onClick={confirmDepositPayment}
-                          className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 font-bold shadow-lg hover:shadow-xl transition-all duration-200"
+                          onClick={confirmPaymentManually}
+                          disabled={checkingPayment}
+                          className="px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg hover:from-orange-700 hover:to-orange-800 font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          ✅ XÁC NHẬN THỦ CÔNG
+                          {checkingPayment ? '🔧 ĐANG XÁC NHẬN...' : '🔧 XÁC NHẬN THANH TOÁN THỦ CÔNG'}
                         </button>
                       </div>
                       <button

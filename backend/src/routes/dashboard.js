@@ -1,0 +1,169 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const Table = require('../models/Table');
+const Order = require('../models/Order');
+const Customer = require('../models/Customer');
+const Employee = require('../models/Employee');
+const Menu = require('../models/Menu');
+const router = express.Router();
+
+// Middleware để xác thực token
+const authenticateToken = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ message: 'Token không được cung cấp' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Token không hợp lệ' });
+  }
+};
+
+// Lấy thống kê tổng quan
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    // Thống kê bàn
+    const totalTables = await Table.countDocuments();
+    const occupiedTables = await Table.countDocuments({ status: 'occupied' });
+
+    // Thống kê đơn hàng
+    const totalOrders = await Order.countDocuments();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayOrders = await Order.countDocuments({
+      createdAt: { $gte: today }
+    });
+
+    // Thống kê doanh thu
+    const totalRevenueResult = await Order.aggregate([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]);
+    const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0;
+
+    const todayRevenueResult = await Order.aggregate([
+      { 
+        $match: { 
+          status: 'completed',
+          createdAt: { $gte: today }
+        } 
+      },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]);
+    const todayRevenue = todayRevenueResult.length > 0 ? todayRevenueResult[0].total : 0;
+
+    // Thống kê người dùng
+    const totalCustomers = await Customer.countDocuments();
+    const totalEmployees = await Employee.countDocuments();
+
+    res.json({
+      totalTables,
+      occupiedTables,
+      totalOrders,
+      todayOrders,
+      totalRevenue,
+      todayRevenue,
+      totalCustomers,
+      totalEmployees
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ message: 'Lỗi server khi lấy thống kê' });
+  }
+});
+
+// Lấy dữ liệu doanh thu theo thời gian
+router.get('/revenue', authenticateToken, async (req, res) => {
+  try {
+    const { range = 'day' } = req.query;
+    let groupFormat, dateFormat, startDate;
+
+    const now = new Date();
+    
+    switch (range) {
+      case 'day':
+        groupFormat = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+        dateFormat = '%Y-%m-%d';
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 ngày
+        break;
+      case 'week':
+        groupFormat = { $dateToString: { format: '%Y-W%U', date: '$createdAt' } };
+        dateFormat = '%Y-W%U';
+        startDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000); // 4 tuần
+        break;
+      case 'month':
+        groupFormat = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
+        dateFormat = '%Y-%m';
+        startDate = new Date(now.getTime() - 12 * 30 * 24 * 60 * 60 * 1000); // 12 tháng
+        break;
+      default:
+        return res.status(400).json({ message: 'Range không hợp lệ' });
+    }
+
+    const revenueData = await Order.aggregate([
+      {
+        $match: {
+          status: 'completed',
+          createdAt: { $gte: startDate }
+        }
+      },
+      {
+        $group: {
+          _id: groupFormat,
+          revenue: { $sum: '$totalAmount' },
+          orders: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      },
+      {
+        $project: {
+          date: '$_id',
+          revenue: 1,
+          orders: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    res.json(revenueData);
+  } catch (error) {
+    console.error('Error fetching revenue data:', error);
+    res.status(500).json({ message: 'Lỗi server khi lấy dữ liệu doanh thu' });
+  }
+});
+
+// Lấy top món bán chạy
+router.get('/top-items', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const topItems = await Order.aggregate([
+      { $match: { status: 'completed' } },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.menuId',
+          name: { $first: '$items.name' },
+          category: { $first: '$items.category' },
+          totalSold: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+        }
+      },
+      { $sort: { totalSold: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
+
+    res.json(topItems);
+  } catch (error) {
+    console.error('Error fetching top items:', error);
+    res.status(500).json({ message: 'Lỗi server khi lấy top món bán chạy' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Webadmin</title>
+    <script>
+        console.log('Debug page loaded');
+        console.log('Testing showPaymentMethodModal...');
+        
+        // Test if the variable exists
+        try {
+            if (typeof showPaymentMethodModal !== 'undefined') {
+                console.log('showPaymentMethodModal is defined:', showPaymentMethodModal);
+            } else {
+                console.log('showPaymentMethodModal is NOT defined');
+            }
+        } catch (e) {
+            console.log('Error checking showPaymentMethodModal:', e.message);
+        }
+    </script>
+</head>
+<body>
+    <h1>Debug Webadmin</h1>
+    <p>Check console for showPaymentMethodModal status</p>
+    <p><a href="http://localhost:5173">Go to Webadmin</a></p>
+</body>
+</html>

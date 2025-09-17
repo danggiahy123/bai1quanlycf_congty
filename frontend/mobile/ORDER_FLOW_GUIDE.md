@@ -74,3 +74,4 @@ home → select-guests → select-table → select-items → select-datetime →
 - `payment.tsx`: Thêm logic nhận thông tin booking và xác nhận thanh toán
 - `booking-success.tsx`: Màn hình mới hiển thị kết quả thành công
 - `_layout.tsx`: Thêm các màn hình mới vào navigation
+
