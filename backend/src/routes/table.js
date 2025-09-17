@@ -1,6 +1,7 @@
 const express = require('express');
 const Table = require('../models/Table');
 const TableHistory = require('../models/TableHistory');
+const Order = require('../models/Order');
 
 const router = express.Router();
 
@@ -81,7 +82,7 @@ router.delete('/:id', async (req, res) => {
 // Mark table as occupied
 router.post('/:id/occupy', async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'ĐÃ ĐƯỢC ĐẶT' }, { new: true });
+    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'occupied' }, { new: true });
     
     // Log history
     await logTableHistory(
@@ -102,7 +103,14 @@ router.post('/:id/occupy', async (req, res) => {
 // Mark table as empty
 router.post('/:id/free', async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, { status: 'TRỐNG' }, { new: true });
+    const tableId = req.params.id;
+    
+    // Xóa tất cả order liên quan đến bàn này
+    const deletedOrders = await Order.deleteMany({ tableId: tableId });
+    console.log(`Đã xóa ${deletedOrders.deletedCount} order của bàn ${tableId}`);
+    
+    // Cập nhật trạng thái bàn về empty
+    const table = await Table.findByIdAndUpdate(tableId, { status: 'empty' }, { new: true });
     
     // Log history
     await logTableHistory(
@@ -110,12 +118,61 @@ router.post('/:id/free', async (req, res) => {
       table.name, 
       'FREED', 
       req.body.performedBy || 'admin', 
-      req.body.performedByName || 'Admin'
+      req.body.performedByName || 'Admin',
+      { 
+        note: `Đã xóa ${deletedOrders.deletedCount} order`,
+        deletedOrdersCount: deletedOrders.deletedCount
+      }
     );
     
-    res.json(table);
+    res.json({
+      ...table.toObject(),
+      deletedOrdersCount: deletedOrders.deletedCount
+    });
   } catch (err) {
+    console.error('Error freeing table:', err);
     res.status(400).json({ error: err.message });
+  }
+});
+
+// Reset all tables to empty status
+router.post('/reset-all', async (req, res) => {
+  try {
+    // Lấy tất cả bàn đang occupied
+    const occupiedTables = await Table.find({ status: 'occupied' });
+    const tableIds = occupiedTables.map(t => t._id);
+    
+    // Xóa tất cả order liên quan đến các bàn này
+    const deletedOrders = await Order.deleteMany({ tableId: { $in: tableIds } });
+    console.log(`Đã xóa ${deletedOrders.deletedCount} order của ${tableIds.length} bàn`);
+    
+    // Reset tất cả về empty
+    await Table.updateMany({ status: 'occupied' }, { status: 'empty' });
+    
+    // Log history cho từng bàn
+    for (const table of occupiedTables) {
+      await logTableHistory(
+        table._id, 
+        table.name, 
+        'FREED', 
+        req.body.performedBy || 'admin', 
+        req.body.performedByName || 'Admin',
+        { 
+          note: 'Reset tất cả bàn',
+          deletedOrdersCount: deletedOrders.deletedCount
+        }
+      );
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Đã reset ${occupiedTables.length} bàn về trạng thái trống và xóa ${deletedOrders.deletedCount} order`,
+      resetCount: occupiedTables.length,
+      deletedOrdersCount: deletedOrders.deletedCount
+    });
+  } catch (err) {
+    console.error('Error resetting all tables:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -23,3 +23,4 @@ const TableHistorySchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('TableHistory', TableHistorySchema);
+

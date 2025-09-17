@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Dialog } from '@headlessui/react';
 import { PencilSquareIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
@@ -26,9 +26,10 @@ type Menu = {
   image?: string;
   note?: string;
   available?: boolean;
+  size?: string;
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
 
 const emptyForm: Omit<Menu, '_id'> = {
   name: '',
@@ -49,7 +50,7 @@ type Employee = {
 export default function App() {
   const [user, setUser] = useState<Employee | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments'>('menu');
+  const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'history'>('menu');
   const [items, setItems] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -270,7 +271,7 @@ export default function App() {
                     <div className="flex items-start justify-between">
                       <div className="font-semibold text-black">
                         {m.name}
-                        {m.size && m.size.length ? ` • ${m.size.join('/')}` : ''}
+                        {m.size ? ` • ${m.size}` : ''}
                       </div>
                       <div className="text-red-600 font-semibold">{m.price.toLocaleString()}đ</div>
                     </div>
@@ -305,7 +306,10 @@ export default function App() {
         ) : tab==='payments' ? (
           <PaymentsAdmin />
         ) : tab==='history' ? (
-          <TableHistoryAdmin />
+          <div className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Lịch sử bàn</h2>
+            <p className="text-gray-600">Tính năng đang được phát triển...</p>
+          </div>
         ) : (
           <BookingsAdmin stats={stats} onStatsChange={setStats} token={token} />
         )}
@@ -403,7 +407,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -590,7 +594,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -867,7 +871,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -1261,10 +1265,10 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<'all'|'TRỐNG'|'ĐÃ ĐƯỢC ĐẶT'>('all');
+  const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Pick<Table,'name'|'note'>>({ name: '', note: '' });
   const [detailOpen, setDetailOpen] = useState(false);
@@ -1298,10 +1302,45 @@ function TablesAdmin() {
     await load();
   }
 
-  async function toggle(id: string, status: 'TRỐNG'|'ĐÃ ĐƯỢC ĐẶT') {
-    if (status==='TRỐNG') await axios.post(`${API}/api/tables/${id}/occupy`);
-    else await axios.post(`${API}/api/tables/${id}/free`);
+  async function toggle(id: string, status: 'empty'|'occupied') {
+    if (status === 'empty') {
+      // Nhận bàn
+      await axios.post(`${API}/api/tables/${id}/occupy`);
+      toast.success('Đã nhận bàn thành công!');
+    } else {
+      // Trả bàn - cần xác nhận
+      if (!confirm('Bạn có chắc chắn muốn trả bàn này? Tất cả dữ liệu món ăn/nước sẽ bị xóa!')) return;
+      
+      try {
+        const response = await axios.post(`${API}/api/tables/${id}/free`);
+        const deletedCount = response.data.deletedOrdersCount || 0;
+        toast.success(`Đã trả bàn thành công! Xóa ${deletedCount} món ăn/nước.`);
+      } catch (error) {
+        console.error('Error freeing table:', error);
+        toast.error('Có lỗi xảy ra khi trả bàn!');
+        return;
+      }
+    }
     await load();
+  }
+
+  async function resetAllTables() {
+    if (!confirm('Bạn có chắc chắn muốn trả tất cả bàn? Tất cả dữ liệu món ăn/nước sẽ bị xóa!')) return;
+    
+    try {
+      setLoading(true);
+      
+      // Gọi API reset tất cả bàn
+      const response = await axios.post(`${API}/api/tables/reset-all`);
+      
+      toast.success(`Đã trả ${response.data.resetCount} bàn thành công! Xóa ${response.data.deletedOrdersCount} món ăn/nước.`);
+      await load();
+    } catch (error) {
+      console.error('Error resetting tables:', error);
+      toast.error('Có lỗi xảy ra khi trả bàn!');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function openDetails(t: Table) {
@@ -1321,13 +1360,22 @@ function TablesAdmin() {
     <div>
       <div className="flex items-center gap-2 mb-4">
         <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-          {(['all','TRỐNG','ĐÃ ĐƯỢC ĐẶT'] as const).map(k => (
-            <button key={k} onClick={()=>setFilter(k)} className={`px-3 py-1.5 ${filter===k?'bg-red-600 text-white':'bg-white'}`}>{k==='all'?'Tất cả':k==='TRỐNG'?'Bàn trống':'Đang dùng'}</button>
+          {(['all','empty','occupied'] as const).map(k => (
+            <button key={k} onClick={()=>setFilter(k as 'all'|'empty'|'occupied')} className={`px-3 py-1.5 ${filter===k?'bg-red-600 text-white':'bg-white'}`}>{k==='all'?'Tất cả':k==='empty'?'Bàn trống':'Đang dùng'}</button>
           ))}
         </div>
-        <button onClick={()=>setOpen(true)} className="ml-auto inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
-          <PlusIcon className="w-5 h-5" /> Tạo bàn
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button 
+            onClick={resetAllTables} 
+            disabled={loading || items.filter(t => t.status === 'occupied').length === 0}
+            className="inline-flex items-center gap-2 bg-orange-600 text-white px-3 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            🔄 Trả tất cả bàn
+          </button>
+          <button onClick={()=>setOpen(true)} className="inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
+            <PlusIcon className="w-5 h-5" /> Tạo bàn
+          </button>
+        </div>
       </div>
 
       {loading ? <div>Đang tải...</div> : (
@@ -1339,15 +1387,15 @@ function TablesAdmin() {
                   <div className="font-semibold">{t.name} <span className="text-gray-400">#{t._id}</span></div>
                   {t.note && <div className="text-sm text-gray-600">{t.note}</div>}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='TRỐNG'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
-                  {t.status==='TRỐNG'?'Bàn trống':'Đang dùng'}
+                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='empty'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
+                  {t.status==='empty'?'Bàn trống':'Đang dùng'}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-3">
                 <button onClick={()=>openDetails(t)} className="px-3 py-1.5 rounded-md border">Thông tin bàn</button>
-                {t.status !== 'TRỐNG' && (
+                {t.status !== 'empty' && (
                   <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border">
-                    {t.status==='empty'?'Nhận bàn':'Trả bàn'}
+                    Trả bàn
                   </button>
                 )}
                 <button onClick={()=>remove(t._id)} className="ml-auto p-2 rounded hover:bg-gray-100">
@@ -1428,7 +1476,7 @@ function TablesAdmin() {
 
 
 
-
+  
 
 
 
