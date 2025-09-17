@@ -11,8 +11,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { Stack } from 'expo-router';
-import { DEFAULT_API_URL } from '@/constants/api';
+import { API_URL } from '../constants/api';
 
 interface Bank {
   id: number;
@@ -25,7 +24,7 @@ interface Bank {
   lookupSupported: number;
 }
 
-export default function PaymentScreen() {
+const PaymentScreen = () => {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
@@ -42,7 +41,7 @@ export default function PaymentScreen() {
   const fetchBanks = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${DEFAULT_API_URL}/api/payment/banks`);
+      const response = await fetch(`${API_URL}/api/payment/banks`);
       const data = await response.json();
       
       if (data.success) {
@@ -78,7 +77,7 @@ export default function PaymentScreen() {
 
     try {
       setLoading(true);
-      const response = await fetch(`${DEFAULT_API_URL}/api/payment/generate-qr`, {
+      const response = await fetch(`${API_URL}/api/payment/generate-qr`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -117,7 +116,7 @@ export default function PaymentScreen() {
 
     try {
       setLoading(true);
-      const response = await fetch(`${DEFAULT_API_URL}/api/payment/lookup-account`, {
+      const response = await fetch(`${API_URL}/api/payment/lookup-account`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,133 +153,130 @@ export default function PaymentScreen() {
   const screenWidth = Dimensions.get('window').width;
 
   return (
-    <>
-      <Stack.Screen options={{ title: '💳 Thanh toán' }} />
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>💳 Thanh toán chuyển khoản</Text>
-          <Text style={styles.subtitle}>Quét mã QR để chuyển tiền</Text>
-        </View>
-
-        {/* Thông tin tài khoản */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Thông tin tài khoản nhận tiền</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Số tài khoản</Text>
-            <TextInput
-              style={styles.input}
-              value={paymentInfo.accountNumber}
-              onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, accountNumber: text }))}
-              placeholder="Nhập số tài khoản"
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tên chủ tài khoản</Text>
-            <TextInput
-              style={styles.input}
-              value={paymentInfo.accountName}
-              onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, accountName: text }))}
-              placeholder="Nhập tên chủ tài khoản"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Ngân hàng</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bankScroll}>
-              {banks.map((bank) => (
-                <TouchableOpacity
-                  key={bank.id}
-                  style={[
-                    styles.bankItem,
-                    selectedBank?.id === bank.id && styles.bankItemSelected
-                  ]}
-                  onPress={() => {
-                    setSelectedBank(bank);
-                    setPaymentInfo(prev => ({ ...prev, bankCode: bank.bin }));
-                  }}
-                >
-                  <Image source={{ uri: bank.logo }} style={styles.bankLogo} />
-                  <Text style={styles.bankName}>{bank.shortName}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Số tiền (VND)</Text>
-            <TextInput
-              style={styles.input}
-              value={paymentInfo.amount}
-              onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, amount: text }))}
-              placeholder="Nhập số tiền"
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nội dung chuyển khoản</Text>
-            <TextInput
-              style={styles.input}
-              value={paymentInfo.description}
-              onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, description: text }))}
-              placeholder="Nhập nội dung chuyển khoản"
-            />
-          </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.lookupButton]}
-              onPress={lookupAccount}
-              disabled={loading || !selectedBank || !paymentInfo.accountNumber}
-            >
-              <Text style={styles.buttonText}>🔍 Tra cứu</Text>
-        </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.button, styles.generateButton]}
-              onPress={generateQRCode}
-              disabled={loading || !selectedBank || !paymentInfo.accountNumber || !paymentInfo.accountName}
-            >
-              {loading ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.buttonText}>📱 Tạo QR</Text>
-              )}
-        </TouchableOpacity>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>💳 Thanh toán chuyển khoản</Text>
+        <Text style={styles.subtitle}>Quét mã QR để chuyển tiền</Text>
       </View>
+
+      {/* Thông tin tài khoản */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Thông tin tài khoản nhận tiền</Text>
+        
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Số tài khoản</Text>
+          <TextInput
+            style={styles.input}
+            value={paymentInfo.accountNumber}
+            onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, accountNumber: text }))}
+            placeholder="Nhập số tài khoản"
+            keyboardType="numeric"
+          />
         </View>
 
-        {/* QR Code */}
-        {qrCode && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>QR Code thanh toán</Text>
-            <View style={styles.qrContainer}>
-            <Image
-                source={{ uri: qrCode }} 
-                style={[styles.qrCode, { width: screenWidth * 0.7, height: screenWidth * 0.7 }]}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Tên chủ tài khoản</Text>
+          <TextInput
+            style={styles.input}
+            value={paymentInfo.accountName}
+            onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, accountName: text }))}
+            placeholder="Nhập tên chủ tài khoản"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Ngân hàng</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bankScroll}>
+            {banks.map((bank) => (
+              <TouchableOpacity
+                key={bank.id}
+                style={[
+                  styles.bankItem,
+                  selectedBank?.id === bank.id && styles.bankItemSelected
+                ]}
+                onPress={() => {
+                  setSelectedBank(bank);
+                  setPaymentInfo(prev => ({ ...prev, bankCode: bank.bin }));
+                }}
+              >
+                <Image source={{ uri: bank.logo }} style={styles.bankLogo} />
+                <Text style={styles.bankName}>{bank.shortName}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Số tiền (VND)</Text>
+          <TextInput
+            style={styles.input}
+            value={paymentInfo.amount}
+            onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, amount: text }))}
+            placeholder="Nhập số tiền"
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nội dung chuyển khoản</Text>
+          <TextInput
+            style={styles.input}
+            value={paymentInfo.description}
+            onChangeText={(text) => setPaymentInfo(prev => ({ ...prev, description: text }))}
+            placeholder="Nhập nội dung chuyển khoản"
+          />
+        </View>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, styles.lookupButton]}
+            onPress={lookupAccount}
+            disabled={loading || !selectedBank || !paymentInfo.accountNumber}
+          >
+            <Text style={styles.buttonText}>🔍 Tra cứu</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.button, styles.generateButton]}
+            onPress={generateQRCode}
+            disabled={loading || !selectedBank || !paymentInfo.accountNumber || !paymentInfo.accountName}
+          >
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>📱 Tạo QR</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* QR Code */}
+      {qrCode && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>QR Code thanh toán</Text>
+          <View style={styles.qrContainer}>
+            <Image 
+              source={{ uri: qrCode }} 
+              style={[styles.qrCode, { width: screenWidth * 0.7, height: screenWidth * 0.7 }]}
               resizeMode="contain"
             />
-              <Text style={styles.qrText}>
-                Quét mã QR để chuyển tiền đến {paymentInfo.accountName}
+            <Text style={styles.qrText}>
+              Quét mã QR để chuyển tiền đến {paymentInfo.accountName}
+            </Text>
+            <Text style={styles.qrSubtext}>
+              {selectedBank?.name} - {paymentInfo.accountNumber}
+            </Text>
+            {paymentInfo.amount && (
+              <Text style={styles.amountText}>
+                {parseInt(paymentInfo.amount).toLocaleString('vi-VN')} VND
               </Text>
-              <Text style={styles.qrSubtext}>
-                {selectedBank?.name} - {paymentInfo.accountNumber}
-              </Text>
-              {paymentInfo.amount && (
-                <Text style={styles.amountText}>
-                  {parseInt(paymentInfo.amount).toLocaleString('vi-VN')} VND
-                </Text>
-              )}
-            </View>
+            )}
           </View>
-        )}
-      </ScrollView>
-    </>
+        </View>
+      )}
+    </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -415,3 +411,5 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
 });
+
+export default PaymentScreen;

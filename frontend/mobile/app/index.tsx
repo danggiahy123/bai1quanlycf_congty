@@ -81,19 +81,50 @@ export default function IndexScreen() {
       setLoadingNotifications(true);
       const token = await AsyncStorage.getItem('userToken');
       
-      if (!token) return;
-
-      const response = await fetch(`${API_URL}/api/notifications/customer`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      // Load both personal notifications and general notifications
+      const promises = [];
       
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+      if (token) {
+        // Personal notifications
+        promises.push(
+          fetch(`${API_URL}/api/notifications/customer`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          })
+        );
       }
+      
+      // General notifications (for all customers)
+      promises.push(
+        fetch(`${API_URL}/api/notifications/general`)
+      );
+
+      const responses = await Promise.all(promises);
+      let allNotifications = [];
+      let totalUnreadCount = 0;
+
+      for (const response of responses) {
+        if (response.ok) {
+          const data = await response.json();
+          if (data.notifications) {
+            allNotifications = [...allNotifications, ...data.notifications];
+          }
+          if (data.unreadCount) {
+            totalUnreadCount += data.unreadCount;
+          }
+        }
+      }
+
+      // Sort by creation date and remove duplicates
+      allNotifications = allNotifications
+        .filter((notification, index, self) => 
+          index === self.findIndex(n => n._id === notification._id)
+        )
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      setNotifications(allNotifications);
+      setUnreadCount(totalUnreadCount);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {

@@ -140,6 +140,90 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Gửi thông báo cho khách hàng (đặt bàn nhanh)
+router.post('/send-customer', async (req, res) => {
+  try {
+    const { title, message, type, bookingId, customerPhone } = req.body;
+
+    // Tìm khách hàng theo số điện thoại
+    const Customer = require('../models/Customer');
+    let customer = null;
+    
+    if (customerPhone) {
+      customer = await Customer.findOne({ phone: customerPhone });
+    }
+
+    if (!customer) {
+      // Nếu không tìm thấy khách hàng, tạo thông báo với user = null
+      // Mobile app sẽ hiển thị thông báo cho tất cả khách hàng
+      const notification = new Notification({
+        user: null, // null = thông báo chung cho tất cả khách hàng
+        type: type || 'booking_confirmed',
+        title: title || 'Đặt bàn thành công',
+        message: message || 'Bàn đã được đặt thành công',
+        bookingId: bookingId || null
+      });
+
+      await notification.save();
+      
+      res.json({ 
+        message: 'Thông báo đã được gửi cho tất cả khách hàng', 
+        notification 
+      });
+    } else {
+      // Tạo thông báo cho khách hàng cụ thể
+      const notification = new Notification({
+        user: customer._id,
+        type: type || 'booking_confirmed',
+        title: title || 'Đặt bàn thành công',
+        message: message || 'Bàn đã được đặt thành công',
+        bookingId: bookingId || null
+      });
+
+      await notification.save();
+      
+      res.json({ 
+        message: 'Thông báo đã được gửi cho khách hàng', 
+        notification 
+      });
+    }
+  } catch (error) {
+    console.error('Lỗi gửi thông báo cho khách hàng:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Lấy thông báo chung cho tất cả khách hàng
+router.get('/general', async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const notifications = await Notification.find({ user: null })
+      .populate('bookingId', 'table numberOfGuests bookingDate bookingTime totalAmount status')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Notification.countDocuments({ user: null });
+    const unreadCount = await Notification.countDocuments({ 
+      user: null, 
+      isRead: false 
+    });
+
+    res.json({
+      notifications,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total,
+      unreadCount
+    });
+  } catch (error) {
+    console.error('Lỗi lấy thông báo chung:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
 // Lấy thông báo cho khách hàng
 router.get('/customer', authenticateToken, async (req, res) => {
   try {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import PaymentModal from './PaymentModal';
 
 type PaymentTable = {
   _id: string;
@@ -23,6 +24,15 @@ export default function PaymentsAdmin() {
   const [tables, setTables] = useState<PaymentTable[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'occupied' | 'empty'>('occupied');
+  const [paymentModal, setPaymentModal] = useState<{
+    isOpen: boolean;
+    tableId: string;
+    totalAmount: number;
+  }>({
+    isOpen: false,
+    tableId: '',
+    totalAmount: 0
+  });
 
   async function loadTables() {
     setLoading(true);
@@ -58,6 +68,24 @@ export default function PaymentsAdmin() {
       toast.error(error.response?.data?.error || 'Có lỗi xảy ra');
     }
   }
+
+  const handleQRPayment = (tableId: string, totalAmount: number) => {
+    setPaymentModal({
+      isOpen: true,
+      tableId,
+      totalAmount
+    });
+  };
+
+  const handlePaymentSuccess = async () => {
+    // Xử lý thanh toán thành công
+    await processPayment(paymentModal.tableId);
+    setPaymentModal({
+      isOpen: false,
+      tableId: '',
+      totalAmount: 0
+    });
+  };
 
   useEffect(() => {
     loadTables();
@@ -184,12 +212,20 @@ export default function PaymentsAdmin() {
 
               <div className="flex gap-2">
                 {table.status === 'occupied' ? (
-                  <button
-                    onClick={() => processPayment(table._id)}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
-                  >
-                    💳 Thanh toán
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => processPayment(table._id)}
+                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                    >
+                      ✅ Xác nhận
+                    </button>
+                    <button
+                      onClick={() => handleQRPayment(table._id, table.order?.totalAmount || 0)}
+                      className="flex-1 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                    >
+                      💳 QR Code
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex-1 px-4 py-2 bg-gray-100 text-gray-500 rounded-md text-sm text-center">
                     Bàn trống
@@ -206,6 +242,16 @@ export default function PaymentsAdmin() {
           )}
         </div>
       )}
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={paymentModal.isOpen}
+        onClose={() => setPaymentModal({ isOpen: false, tableId: '', totalAmount: 0 })}
+        onPaymentSuccess={handlePaymentSuccess}
+        tableId={paymentModal.tableId}
+        totalAmount={paymentModal.totalAmount}
+        API={API}
+      />
     </div>
   );
 }

@@ -190,6 +190,17 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Phần thanh toán */}
+      <View style={styles.paymentCard}>
+        <TouchableOpacity 
+          onPress={() => router.push('/payment')} 
+          style={styles.paymentButton}
+        >
+          <Ionicons name="card" size={24} color="#fff" />
+          <ThemedText style={styles.paymentButtonText}>💳 THANH TOÁN</ThemedText>
+        </TouchableOpacity>
+      </View>
+
       {/* Phần hiển thị thông báo */}
       <View style={styles.notificationsSection}>
         <View style={styles.sectionHeader}>
@@ -326,6 +337,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  paymentCard: {
+    margin: 16,
+    borderRadius: 12,
+    backgroundColor: '#4CAF50',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  paymentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+  },
+  paymentButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   notificationsSection: {
     backgroundColor: '#fff',

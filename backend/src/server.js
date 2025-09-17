@@ -12,6 +12,7 @@ const customerRouter = require('./routes/customer');
 const bookingRouter = require('./routes/booking');
 const notificationRouter = require('./routes/notification');
 const tableHistoryRouter = require('./routes/tableHistory');
+const paymentRouter = require('./routes/payment');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/customers', customerRouter);
 app.use('/api/bookings', bookingRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/table-history', tableHistoryRouter);
+app.use('/api/payment', paymentRouter);
 
 // Removed /api/upload endpoint
 

@@ -5,6 +5,8 @@ import { PencilSquareIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outli
 import { Toaster, toast } from 'react-hot-toast';
 import AuthSimple from './components/AuthSimple';
 import PaymentsAdmin from './components/PaymentsAdmin';
+import PaymentAdmin from './components/PaymentAdmin';
+import QuickBookingModal from './components/QuickBookingModal';
 
 type TableHistoryEntry = {
   _id: string;
@@ -50,7 +52,8 @@ type Employee = {
 export default function App() {
   const [user, setUser] = useState<Employee | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'history'>('menu');
+  const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history'>('menu');
+  const [quickBookingModal, setQuickBookingModal] = useState(false);
   const [items, setItems] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -206,6 +209,12 @@ export default function App() {
             <button onClick={() => setTab('tables')} className={`px-3 py-1.5 rounded-md border ${tab==='tables'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Bàn</button>
             <button onClick={() => setTab('employees')} className={`px-3 py-1.5 rounded-md border ${tab==='employees'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Nhân viên</button>
             <button onClick={() => setTab('customers')} className={`px-3 py-1.5 rounded-md border ${tab==='customers'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Khách hàng</button>
+            <button 
+              onClick={() => setQuickBookingModal(true)} 
+              className="px-3 py-1.5 rounded-md border border-green-600 bg-green-600 text-white hover:bg-green-700"
+            >
+              🚀 Đặt bàn nhanh
+            </button>
             <button onClick={() => setTab('bookings')} className={`px-3 py-1.5 rounded-md border ${tab==='bookings'?'bg-red-600 text-white border-red-600':'border-gray-300'} relative`}>
               Đặt bàn cho khách
               {stats && stats.pending > 0 && (
@@ -216,6 +225,9 @@ export default function App() {
             </button>
             <button onClick={() => setTab('payments')} className={`px-3 py-1.5 rounded-md border ${tab==='payments'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
               Thanh toán bàn
+            </button>
+            <button onClick={() => setTab('payment')} className={`px-3 py-1.5 rounded-md border ${tab==='payment'?'bg-green-600 text-white border-green-600':'border-gray-300'}`}>
+              💳 VietQR
             </button>
             <button onClick={() => setTab('history')} className={`px-3 py-1.5 rounded-md border ${tab==='history'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
               Lịch sử bàn
@@ -305,6 +317,8 @@ export default function App() {
           <CustomersAdmin />
         ) : tab==='payments' ? (
           <PaymentsAdmin />
+        ) : tab==='payment' ? (
+          <PaymentAdmin API={API} />
         ) : tab==='history' ? (
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Lịch sử bàn</h2>
@@ -1467,6 +1481,20 @@ function TablesAdmin() {
           </Dialog.Panel>
         </div>
       </Dialog>
+
+      {/* Quick Booking Modal */}
+      <QuickBookingModal
+        isOpen={quickBookingModal}
+        onClose={() => setQuickBookingModal(false)}
+        onBookingSuccess={() => {
+          // Refresh bookings data
+          if (tab === 'bookings') {
+            // Trigger refresh for bookings tab
+            window.location.reload();
+          }
+        }}
+        API={API}
+      />
     </div>
   );
 }
