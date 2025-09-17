@@ -38,6 +38,7 @@ export default function IndexScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [deletingNotification, setDeletingNotification] = useState<string | null>(null);
 
   useEffect(() => {
     checkLoginStatus();
@@ -154,6 +155,51 @@ export default function IndexScreen() {
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    try {
+      setDeletingNotification(notificationId);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        setNotifications(prev => prev.filter(notif => notif._id !== notificationId));
+        // Giảm unread count nếu thông báo chưa đọc
+        const notification = notifications.find(notif => notif._id === notificationId);
+        if (notification && !notification.isRead) {
+          setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    } finally {
+      setDeletingNotification(null);
+    }
+  };
+
+  const clearOldNotifications = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      // Xóa tất cả thông báo đã đọc
+      const readNotifications = notifications.filter(notif => notif.isRead);
+      
+      for (const notification of readNotifications) {
+        await deleteNotification(notification._id);
+      }
+    } catch (error) {
+      console.error('Error clearing old notifications:', error);
     }
   };
 
@@ -276,30 +322,49 @@ export default function IndexScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.customerHeader}>
-          <View style={styles.userInfo}>
-            <Ionicons name="person" size={40} color="#16a34a" />
-            <View style={styles.userDetails}>
-              <ThemedText type="subtitle" style={styles.userName}>
-                {userInfo.fullName}
-              </ThemedText>
-              <ThemedText style={styles.userRole}>Khách hàng</ThemedText>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroBackground}>
+            <View style={styles.heroContent}>
+              <View style={styles.welcomeText}>
+                <ThemedText style={styles.heroTitle}>Chào mừng,</ThemedText>
+                <ThemedText style={styles.heroSubtitle}>{userInfo.fullName}</ThemedText>
+                <ThemedText style={styles.heroDescription}>Khách hàng VIP</ThemedText>
+              </View>
+              <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                <Ionicons name="log-out" size={20} color="#fff" />
+              </TouchableOpacity>
             </View>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Ionicons name="log-out" size={20} color="#16a34a" />
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActionsSection}>
+          <TouchableOpacity 
+            style={styles.primaryAction}
+            onPress={() => router.push('/select-guests')}
+          >
+            <View style={styles.actionIconContainer}>
+              <Ionicons name="restaurant" size={32} color="#fff" />
+            </View>
+            <View style={styles.actionContent}>
+              <ThemedText style={styles.actionTitle}>ĐẶT BÀN NGAY</ThemedText>
+              <ThemedText style={styles.actionSubtitle}>Chọn bàn và món ăn</ThemedText>
+            </View>
+            <Ionicons name="arrow-forward" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {/* Thông báo */}
+
+        {/* Notifications */}
         <View style={styles.notificationsSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleContainer}>
               <Ionicons name="notifications" size={20} color="#16a34a" />
               <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
-                Thông báo từ quản lý
+                Thông báo mới
               </ThemedText>
               {unreadCount > 0 && (
                 <View style={styles.badge}>
@@ -309,9 +374,15 @@ export default function IndexScreen() {
                 </View>
               )}
             </View>
-            <TouchableOpacity onPress={loadNotifications} style={styles.refreshButton}>
-              <Ionicons name="refresh" size={20} color="#16a34a" />
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={clearOldNotifications} style={styles.clearButton}>
+                <Ionicons name="trash" size={16} color="#ef4444" />
+                <ThemedText style={styles.clearButtonText}>Xóa cũ</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={loadNotifications} style={styles.refreshButton}>
+                <Ionicons name="refresh" size={20} color="#16a34a" />
+              </TouchableOpacity>
+            </View>
           </View>
           
           {loadingNotifications ? (
@@ -327,95 +398,109 @@ export default function IndexScreen() {
           ) : (
             <>
             {notifications.slice(0, 3).map((item) => (
-              <TouchableOpacity
+              <View
                 key={item._id}
                 style={[
                   styles.notificationCard,
-                  !item.isRead && styles.unreadCard
+                  !item.isRead && styles.unreadCard,
+                  item.isRead && styles.readCard
                 ]}
-                onPress={() => !item.isRead && markAsRead(item._id)}
               >
-                <View style={styles.notificationHeader}>
-                  <View style={styles.notificationIconContainer}>
-                    <Ionicons
-                      name="restaurant"
-                      size={20}
-                      color="#16a34a"
-                    />
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <ThemedText style={styles.notificationTitle}>
-                      {item.title}
-                    </ThemedText>
-                    <ThemedText style={styles.notificationMessage}>
-                      {item.message}
-                    </ThemedText>
-                    {item.bookingId && (
-                      <View style={styles.bookingInfo}>
-                        <ThemedText style={styles.bookingText}>
-                          Bàn: {item.bookingId.table} | {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} {item.bookingId.bookingTime}
+                <TouchableOpacity
+                  style={styles.notificationContent}
+                  onPress={() => !item.isRead && markAsRead(item._id)}
+                  disabled={item.isRead}
+                >
+                  <View style={styles.notificationHeader}>
+                    <View style={styles.notificationIconContainer}>
+                      <Ionicons
+                        name="restaurant"
+                        size={20}
+                        color={item.isRead ? "#9ca3af" : "#16a34a"}
+                      />
+                    </View>
+                    <View style={styles.notificationTextContent}>
+                      <View style={styles.titleRow}>
+                        <ThemedText style={[
+                          styles.notificationTitle,
+                          item.isRead && styles.readText
+                        ]}>
+                          {item.title}
                         </ThemedText>
-                        <ThemedText style={styles.bookingAmount}>
-                          {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
-                        </ThemedText>
-                        {/* Trạng thái đặt bàn */}
-                        {item.type === 'booking_pending' && (
-                          <View style={styles.statusContainer}>
-                            <ThemedText style={styles.pendingStatus}>ĐANG CHỜ XÁC NHẬN</ThemedText>
-                          </View>
-                        )}
-                        {item.type === 'booking_confirmed' && (
-                          <View style={styles.statusContainer}>
-                            <ThemedText style={styles.confirmedStatus}>BÀN ĐÃ ĐƯỢC DUYỆT</ThemedText>
+                        {item.isRead && (
+                          <View style={styles.readBadge}>
+                            <ThemedText style={styles.readBadgeText}>ĐÃ ĐỌC</ThemedText>
                           </View>
                         )}
                       </View>
-                    )}
+                      <ThemedText style={[
+                        styles.notificationMessage,
+                        item.isRead && styles.readText
+                      ]}>
+                        {item.message}
+                      </ThemedText>
+                      {item.bookingId && (
+                        <View style={styles.bookingInfo}>
+                          <ThemedText style={[
+                            styles.bookingText,
+                            item.isRead && styles.readText
+                          ]}>
+                            Bàn: {item.bookingId.table} | {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} {item.bookingId.bookingTime}
+                          </ThemedText>
+                          <ThemedText style={[
+                            styles.bookingAmount,
+                            item.isRead && styles.readText
+                          ]}>
+                            {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
+                          </ThemedText>
+                          {/* Trạng thái đặt bàn */}
+                          {item.type === 'booking_pending' && (
+                            <View style={styles.statusContainer}>
+                              <ThemedText style={[
+                                styles.pendingStatus,
+                                item.isRead && styles.readStatus
+                              ]}>ĐANG CHỜ XÁC NHẬN</ThemedText>
+                            </View>
+                          )}
+                          {item.type === 'booking_confirmed' && (
+                            <View style={styles.statusContainer}>
+                              <ThemedText style={[
+                                styles.confirmedStatus,
+                                item.isRead && styles.readStatus
+                              ]}>BÀN ĐÃ ĐƯỢC DUYỆT</ThemedText>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                    {!item.isRead && <View style={styles.unreadDot} />}
                   </View>
-                  {!item.isRead && <View style={styles.unreadDot} />}
-                </View>
-                <ThemedText style={styles.notificationTime}>
-                  {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-                </ThemedText>
-              </TouchableOpacity>
+                  <ThemedText style={[
+                    styles.notificationTime,
+                    item.isRead && styles.readText
+                  ]}>
+                    {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                  </ThemedText>
+                </TouchableOpacity>
+                
+                {/* Nút xóa thông báo */}
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => deleteNotification(item._id)}
+                  disabled={deletingNotification === item._id}
+                >
+                  {deletingNotification === item._id ? (
+                    <Ionicons name="hourglass-outline" size={16} color="#9ca3af" />
+                  ) : (
+                    <Ionicons name="trash" size={16} color="#ef4444" />
+                  )}
+                </TouchableOpacity>
+              </View>
             ))}
             </>
           )}
-          
-          {notifications.length > 3 && (
-            <TouchableOpacity 
-              style={styles.viewAllButton}
-              onPress={() => router.push('/home')}
-            >
-              <ThemedText style={styles.viewAllText}>Xem tất cả thông báo</ThemedText>
-              <Ionicons name="chevron-forward" size={16} color="#16a34a" />
-            </TouchableOpacity>
-          )}
         </View>
 
-        {/* Customer Features */}
-        <View style={styles.featuresContainer}>
-          <ThemedText type="title" style={styles.featuresTitle}>
-            Dịch vụ nhà hàng
-          </ThemedText>
-          
-          {/* Feature 1: Đặt bàn */}
-          <TouchableOpacity 
-            style={[styles.featureCard, { backgroundColor: '#16a34a' }]}
-            onPress={() => router.push('/select-guests')}
-          >
-            <View style={styles.featureContent}>
-              <Ionicons name="people" size={32} color="#fff" />
-              <View style={styles.featureText}>
-                <ThemedText style={styles.featureTitle}>Đặt bàn</ThemedText>
-                <ThemedText style={styles.featureDescription}>
-                  Đặt bàn cho bữa ăn của bạn
-                </ThemedText>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#fff" />
-            </View>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -424,11 +509,11 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 16,
+    paddingBottom: 20,
   },
   welcomeContainer: {
     flex: 1,
@@ -474,6 +559,48 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#dc2626',
   },
+  // Hero Section
+  heroSection: {
+    marginBottom: 20,
+  },
+  heroBackground: {
+    backgroundColor: '#16a34a',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingTop: 20,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  heroContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  welcomeText: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.9,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  heroDescription: {
+    fontSize: 14,
+    color: '#fff',
+    opacity: 0.8,
+  },
   customerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -503,8 +630,93 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
   },
+  logoutText: {
+    color: '#16a34a',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Quick Actions
+  quickActionsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  primaryAction: {
+    backgroundColor: '#16a34a',
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  actionIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  actionSubtitle: {
+    fontSize: 14,
+    color: '#fff',
+    opacity: 0.9,
+  },
+
+  // Stats Section
+  statsSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 12,
+  },
+  statsCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statsContent: {
+    marginLeft: 12,
+  },
+  statsNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 2,
+  },
+  statsLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+
   featuresContainer: {
     gap: 16,
   },
@@ -514,9 +726,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   featureCard: {
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   featureContent: {
     flexDirection: 'row',
@@ -527,7 +744,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 4,
@@ -537,14 +754,53 @@ const styles = StyleSheet.create({
     color: '#fff',
     opacity: 0.9,
   },
-  // Notification styles
-  notificationsSection: {
+
+  // Features Grid
+  featuresGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  featureItem: {
+    width: '47%',
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#16a34a',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  featureLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  // Notification styles
+  notificationsSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -561,6 +817,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#16a34a',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    gap: 4,
+  },
+  clearButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ef4444',
   },
   badge: {
     backgroundColor: '#ef4444',
@@ -601,11 +876,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    position: 'relative',
   },
   unreadCard: {
     backgroundColor: '#f0fdf4',
     borderColor: '#16a34a',
     borderLeftWidth: 3,
+  },
+  readCard: {
+    backgroundColor: '#f8f9fa',
+    borderColor: '#9ca3af',
+    borderLeftWidth: 3,
+    opacity: 0.7,
   },
   notificationHeader: {
     flexDirection: 'row',
@@ -622,6 +904,40 @@ const styles = StyleSheet.create({
   },
   notificationContent: {
     flex: 1,
+  },
+  notificationTextContent: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  readBadge: {
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  readBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  readText: {
+    opacity: 0.6,
+  },
+  readStatus: {
+    opacity: 0.5,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: '#fef2f2',
   },
   notificationTitle: {
     fontSize: 16,

@@ -20,7 +20,7 @@ export default function SelectGuestsScreen() {
     const guests = parseInt(numberOfGuests);
     
     if (!numberOfGuests || isNaN(guests) || guests < 1) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số khách từ 1 trở lên');
+      Alert.alert('Lỗi', 'Vui lòng chọn số khách từ 1 trở lên');
       return;
     }
 
@@ -47,75 +47,48 @@ export default function SelectGuestsScreen() {
       
       <View style={styles.content}>
         <View style={styles.header}>
-          <Ionicons name="people" size={60} color="#16a34a" />
+          <Ionicons name="people" size={50} color="#16a34a" />
           <ThemedText type="title" style={styles.title}>
             Số khách
           </ThemedText>
-          <ThemedText style={styles.subtitle}>
-            Nhập số lượng khách sẽ đến
-          </ThemedText>
         </View>
 
-        {/* Quick Select Buttons */}
-        <View style={styles.quickSelectContainer}>
-          <ThemedText style={styles.quickSelectTitle}>Chọn nhanh:</ThemedText>
-          <View style={styles.quickSelectGrid}>
-            {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50].map((guests) => (
+        <View style={styles.quickSelect}>
+          <View style={styles.quickSelectButtons}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
               <TouchableOpacity
-                key={guests}
+                key={num}
                 style={[
                   styles.quickSelectButton,
-                  numberOfGuests === guests.toString() && styles.quickSelectButtonActive
+                  numberOfGuests === num.toString() && styles.quickSelectButtonActive
                 ]}
-                onPress={() => quickSelect(guests)}
+                onPress={() => quickSelect(num)}
               >
-                <ThemedText style={[
-                  styles.quickSelectText,
-                  numberOfGuests === guests.toString() && styles.quickSelectTextActive
+                <Text style={[
+                  styles.quickSelectButtonText,
+                  numberOfGuests === num.toString() && styles.quickSelectButtonTextActive
                 ]}>
-                  {guests}
-                </ThemedText>
+                  {num}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Manual Input */}
-        <View style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Hoặc nhập số khách:</ThemedText>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="people" size={20} color="#16a34a" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Nhập số khách"
-              value={numberOfGuests}
-              onChangeText={setNumberOfGuests}
-              keyboardType="numeric"
-              maxLength={3}
-            />
-          </View>
+        <View style={styles.inputSection}>
+          <TextInput
+            style={styles.input}
+            value={numberOfGuests}
+            onChangeText={setNumberOfGuests}
+            placeholder="Hoặc nhập số khách"
+            keyboardType="numeric"
+            maxLength={2}
+          />
         </View>
 
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            !numberOfGuests && styles.continueButtonDisabled
-          ]}
-          onPress={handleContinue}
-          disabled={!numberOfGuests}
-        >
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
           <ThemedText style={styles.continueButtonText}>Tiếp tục</ThemedText>
         </TouchableOpacity>
-
-        {/* Info */}
-        <View style={styles.infoContainer}>
-          <Ionicons name="information-circle" size={16} color="#6b7280" />
-          <ThemedText style={styles.infoText}>
-            Không giới hạn số khách
-          </ThemedText>
-        </View>
       </View>
     </ThemedView>
   );
@@ -124,42 +97,31 @@ export default function SelectGuestsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
   },
   content: {
     flex: 1,
     padding: 24,
+    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
     color: '#16a34a',
+    marginTop: 16,
   },
-  subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  quickSelectContainer: {
+  quickSelect: {
     marginBottom: 32,
   },
-  quickSelectTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  quickSelectGrid: {
+  quickSelectButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
     justifyContent: 'center',
+    gap: 12,
   },
   quickSelectButton: {
     width: 60,
@@ -170,72 +132,51 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   quickSelectButtonActive: {
     backgroundColor: '#16a34a',
     borderColor: '#16a34a',
   },
-  quickSelectText: {
+  quickSelectButtonText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#16a34a',
+    color: '#6b7280',
   },
-  quickSelectTextActive: {
+  quickSelectButtonTextActive: {
     color: '#fff',
   },
-  inputContainer: {
+  inputSection: {
     marginBottom: 32,
   },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingHorizontal: 16,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
   input: {
-    flex: 1,
-    paddingVertical: 16,
-    fontSize: 18,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
     textAlign: 'center',
+    color: '#374151',
   },
   continueButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#16a34a',
-    paddingVertical: 16,
     borderRadius: 12,
-    gap: 8,
-    marginBottom: 16,
-  },
-  continueButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   continueButtonText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '600',
-  },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#6b7280',
+    fontWeight: 'bold',
   },
 });

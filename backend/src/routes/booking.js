@@ -208,7 +208,11 @@ router.get('/admin', async (req, res) => {
     const bookings = await Booking.find(query)
       .populate('customer', 'fullName email phone')
       .populate('table', 'name')
-      .populate('menuItems.item', 'name price')
+      .populate({
+        path: 'menuItems.item',
+        model: 'Menu',
+        select: 'name price'
+      })
       .populate('confirmedBy', 'fullName')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -226,7 +230,13 @@ router.get('/admin', async (req, res) => {
     });
   } catch (error) {
     console.error('Lỗi lấy danh sách booking:', error);
-    res.status(500).json({ message: 'Lỗi server' });
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      message: 'Lỗi server', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -474,6 +484,99 @@ router.get('/employee', async (req, res) => {
   } catch (error) {
     console.error('Lỗi lấy danh sách booking:', error);
     res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Admin đặt bàn nhanh (không cần token)
+router.post('/admin-quick-booking', async (req, res) => {
+  try {
+    console.log('Admin quick booking request:', req.body);
+    const { 
+      customerName,
+      customerPhone,
+      customerEmail,
+      tableId, 
+      numberOfGuests, 
+      bookingDate, 
+      bookingTime, 
+      specialRequests 
+    } = req.body;
+
+    // Kiểm tra thông tin bắt buộc
+    if (!tableId || !numberOfGuests || !bookingDate || !bookingTime || !customerName) {
+      return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
+    }
+
+    // Kiểm tra bàn có tồn tại
+    const table = await Table.findById(tableId);
+    if (!table) {
+      return res.status(404).json({ message: 'Không tìm thấy bàn' });
+    }
+
+    // Kiểm tra xem bàn có booking nào đang pending hoặc confirmed không
+    const existingBooking = await Booking.findOne({
+      table: tableId,
+      status: { $in: ['pending', 'confirmed'] },
+      bookingDate: new Date(bookingDate),
+      bookingTime: bookingTime
+    });
+
+    if (existingBooking) {
+      return res.status(400).json({ message: 'Bàn này đã được đặt trong khoảng thời gian này' });
+    }
+
+    // Tạo booking mới
+    const booking = new Booking({
+      customer: null, // Admin đặt bàn nhanh không cần customer ID
+      table: tableId, // Sử dụng tableId làm table
+      numberOfGuests,
+      bookingDate: new Date(bookingDate),
+      bookingTime,
+      menuItems: [], // Admin đặt bàn nhanh không có menu items
+      totalAmount: 0, // Admin đặt bàn nhanh không có tổng tiền
+      status: 'confirmed', // Admin đặt bàn nhanh tự động confirm
+      notes: specialRequests,
+      confirmedBy: req.user?.id || 'admin', // Nếu có user thì dùng user id, không thì dùng 'admin'
+      confirmedAt: new Date(),
+      customerInfo: {
+        fullName: customerName,
+        phone: customerPhone,
+        email: customerEmail
+      }
+    });
+
+    await booking.save();
+
+    // Cập nhật trạng thái bàn
+    table.status = 'occupied';
+    await table.save();
+
+    // Tạo thông báo chung cho tất cả khách hàng về đặt bàn mới
+    try {
+      const generalNotification = new Notification({
+        user: null, // null = thông báo chung cho tất cả khách hàng
+        type: 'booking_pending',
+        title: 'Đặt bàn thành công!',
+        message: `Bàn ${table.name} đã được đặt cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. Tổng tiền: ${totalAmount.toLocaleString()}đ. Đang chờ nhân viên xác nhận.`,
+        bookingId: booking._id,
+        isRead: false
+      });
+      
+      await generalNotification.save();
+      console.log('Đã gửi thông báo chung cho khách hàng về đặt bàn thành công');
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo chung cho khách hàng:', notificationError);
+    }
+
+    res.status(201).json({ 
+      message: 'Đặt bàn thành công',
+      booking: booking
+    });
+  } catch (error) {
+    console.error('Lỗi tạo booking admin:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
   }
 });
 

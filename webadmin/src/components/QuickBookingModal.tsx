@@ -113,10 +113,7 @@ const QuickBookingModal: React.FC<QuickBookingModalProps> = ({
       const data = await response.json();
 
       if (response.ok) {
-        // Gửi thông báo cho khách hàng
-        await sendNotificationToCustomer(data.booking);
-        
-        toast.success('Đặt bàn thành công! Thông báo đã được gửi cho khách hàng.');
+        toast.success('Đặt bàn thành công!');
         onBookingSuccess();
         onClose();
         resetForm();

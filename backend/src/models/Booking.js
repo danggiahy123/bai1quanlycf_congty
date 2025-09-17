@@ -4,12 +4,12 @@ const bookingSchema = new mongoose.Schema({
   customer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer',
-    required: true
+    required: false // Cho phép null cho admin quick booking
   },
   table: {
     type: String,
     ref: 'Table',
-    required: true
+    required: false // Cho phép null cho admin quick booking
   },
   numberOfGuests: {
     type: Number,
@@ -46,7 +46,7 @@ const bookingSchema = new mongoose.Schema({
   }],
   totalAmount: {
     type: Number,
-    required: true
+    required: false // Cho phép null cho admin quick booking
   },
   status: {
     type: String,

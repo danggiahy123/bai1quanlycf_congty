@@ -6,7 +6,6 @@ import { Toaster, toast } from 'react-hot-toast';
 import AuthSimple from './components/AuthSimple';
 import PaymentsAdmin from './components/PaymentsAdmin';
 import PaymentAdmin from './components/PaymentAdmin';
-import QuickBookingModal from './components/QuickBookingModal';
 
 type TableHistoryEntry = {
   _id: string;
@@ -53,7 +52,6 @@ export default function App() {
   const [user, setUser] = useState<Employee | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history'>('menu');
-  const [quickBookingModal, setQuickBookingModal] = useState(false);
   const [items, setItems] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -176,7 +174,7 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900 flex">
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -201,112 +199,307 @@ export default function App() {
           },
         }}
       />
-      <header className="px-6 py-4 bg-white border-b">
-        <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <h1 className="text-xl font-semibold">Admin</h1>
-          <nav className="ml-6 flex gap-2">
-            <button onClick={() => setTab('menu')} className={`px-3 py-1.5 rounded-md border ${tab==='menu'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Món</button>
-            <button onClick={() => setTab('tables')} className={`px-3 py-1.5 rounded-md border ${tab==='tables'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Bàn</button>
-            <button onClick={() => setTab('employees')} className={`px-3 py-1.5 rounded-md border ${tab==='employees'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Nhân viên</button>
-            <button onClick={() => setTab('customers')} className={`px-3 py-1.5 rounded-md border ${tab==='customers'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>Khách hàng</button>
+      {/* Sidebar */}
+      <div className="fixed left-0 top-0 w-64 h-full bg-gray-900 shadow-xl border-r border-gray-700 z-10">
+        {/* Logo */}
+        <div className="p-6 border-b border-gray-700">
+          <h1 className="text-2xl font-bold text-white">
+            <span className="text-green-500">Water</span>
+            <span className="text-gray-300">DG</span>
+          </h1>
+        </div>
+        
+        {/* Navigation */}
+        <nav className="mt-6 px-3 pb-24">
+          <div className="space-y-1">
             <button 
-              onClick={() => setQuickBookingModal(true)} 
-              className="px-3 py-1.5 rounded-md border border-green-600 bg-green-600 text-white hover:bg-green-700"
+              onClick={() => setTab('menu')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'menu' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
             >
-              🚀 Đặt bàn nhanh
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Quản lý Món
             </button>
-            <button onClick={() => setTab('bookings')} className={`px-3 py-1.5 rounded-md border ${tab==='bookings'?'bg-red-600 text-white border-red-600':'border-gray-300'} relative`}>
+            
+            <button 
+              onClick={() => setTab('tables')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'tables' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Quản lý Bàn
+            </button>
+            
+            <button 
+              onClick={() => setTab('employees')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'employees' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+              </svg>
+              Nhân viên
+            </button>
+            
+            <button 
+              onClick={() => setTab('customers')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'customers' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Khách hàng
+            </button>
+            
+            <button 
+              onClick={() => setTab('bookings')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors relative ${
+                tab === 'bookings' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
               Đặt bàn cho khách
               {stats && stats.pending > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute right-3 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   {stats.pending}
                 </span>
               )}
             </button>
-            <button onClick={() => setTab('payments')} className={`px-3 py-1.5 rounded-md border ${tab==='payments'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
+            
+            <button 
+              onClick={() => setTab('payments')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'payments' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
               Thanh toán bàn
             </button>
-            <button onClick={() => setTab('payment')} className={`px-3 py-1.5 rounded-md border ${tab==='payment'?'bg-green-600 text-white border-green-600':'border-gray-300'}`}>
-              💳 VietQR
+            
+            <button 
+              onClick={() => setTab('payment')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'payment' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              VietQR
             </button>
-            <button onClick={() => setTab('history')} className={`px-3 py-1.5 rounded-md border ${tab==='history'?'bg-red-600 text-white border-red-600':'border-gray-300'}`}>
+            
+            <button 
+              onClick={() => setTab('history')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'history' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               Lịch sử bàn
             </button>
-          </nav>
-          <input
-            placeholder="Tìm theo tên/ghi chú..."
-            className="ml-auto w-72 rounded-md border-gray-300 focus:border-red-500 focus:ring-red-500"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          {tab==='menu' && (
-            <button
-              onClick={startCreate}
-              className="inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700"
-            >
-              <PlusIcon className="w-5 h-5" /> Thêm món
-            </button>
-          )}
-          <div className="flex items-center gap-3 ml-4">
-            <span className="text-sm text-gray-600">
-              Xin chào, <span className="font-medium">{user.fullName}</span>
-            </span>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-            >
-              Đăng xuất
-            </button>
+          </div>
+        </nav>
+        
+        {/* User Info */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-700">
+          <div className="flex items-center mb-2">
+            <div className="w-7 h-7 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-medium">
+                {user.fullName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className="ml-2 flex-1 min-w-0">
+              <p className="text-xs font-medium text-white truncate">{user.fullName}</p>
+              <p className="text-xs text-gray-400">Quản trị viên</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full px-2 py-1.5 bg-green-700 text-white rounded-md hover:bg-green-600 text-xs transition-colors font-medium"
+          >
+            Đăng xuất
+          </button>
+        </div>
+      </div>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col ml-64">
+        {/* Top Bar */}
+        <div className="bg-gray-900 border-b border-gray-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-white capitalize">
+              {tab === 'menu' && 'Quản lý Món ăn'}
+              {tab === 'tables' && 'Quản lý Bàn'}
+              {tab === 'employees' && 'Quản lý Nhân viên'}
+              {tab === 'customers' && 'Quản lý Khách hàng'}
+              {tab === 'bookings' && 'Quản lý Đặt bàn'}
+              {tab === 'payments' && 'Thanh toán Bàn'}
+              {tab === 'payment' && 'VietQR'}
+              {tab === 'history' && 'Lịch sử Bàn'}
+            </h2>
+            
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="w-64 px-4 py-2 bg-gray-800 text-white placeholder-gray-400 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              {tab==='menu' && (
+                <button
+                  onClick={startCreate}
+                  className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-lg"
+                >
+                  <PlusIcon className="w-5 h-5" /> Thêm món
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-5xl mx-auto p-6">
+        {/* Main Content Area */}
+        <div className="flex-1 bg-gray-900 p-6 overflow-y-auto">
         {tab==='menu' ? (
           loading ? (
-            <div>Đang tải...</div>
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mb-4"></div>
+              <p className="text-gray-400 text-lg">Đang tải thực đơn...</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
               {filtered.map((m) => (
-                <div key={m._id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <div className="h-40 bg-gray-100">
+                <div key={m._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg overflow-hidden hover:shadow-xl hover:border-green-500 transition-all duration-300 group">
+                  {/* Image Container - Tỷ lệ dọc cho hình ảnh dài */}
+                  <div className="relative h-64 bg-gradient-to-br from-gray-700 to-gray-800 overflow-hidden">
                     {m.image ? (
                       <img
                         src={m.image.startsWith('http') ? m.image : `${API}${m.image}`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        alt={m.name}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">No image</div>
-                    )}
-                  </div>
-                  <div className="p-4 space-y-1">
-                    <div className="flex items-start justify-between">
-                      <div className="font-semibold text-black">
-                        {m.name}
-                        {m.size ? ` • ${m.size}` : ''}
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
                       </div>
-                      <div className="text-red-600 font-semibold">{m.price.toLocaleString()}đ</div>
-                    </div>
-                    {m.note && <div className="text-sm text-gray-600">{m.note}</div>}
-                    <div className="flex items-center justify-between pt-2">
+                    )}
+                    
+                    {/* Status Badge - Floating on image */}
+                    <div className="absolute top-3 left-3">
                       <span
-                        className={`text-xs px-2 py-0.5 rounded ${m.available ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
+                        className={`text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm ${
+                          m.available 
+                            ? 'bg-green-500/90 text-white border border-green-400/50' 
+                            : 'bg-gray-800/90 text-gray-300 border border-gray-600/50'
+                        }`}
                       >
                         {m.available ? 'Đang bán' : 'Tạm ngừng'}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => startEdit(m)} className="p-2 rounded hover:bg-gray-100">
-                          <PencilSquareIcon className="w-5 h-5 text-gray-700" />
-                        </button>
-                        <button onClick={() => remove(m._id)} className="p-2 rounded hover:bg-gray-100">
-                          <TrashIcon className="w-5 h-5 text-red-600" />
-                        </button>
+                    </div>
+
+                    {/* Action Buttons - Floating on image */}
+                    <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <button 
+                        onClick={() => startEdit(m)} 
+                        className="p-2 bg-blue-600/90 text-white rounded-lg hover:bg-blue-500 transition-colors backdrop-blur-sm border border-blue-400/50"
+                        title="Chỉnh sửa"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => remove(m._id)} 
+                        className="p-2 bg-red-600/90 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm border border-red-400/50"
+                        title="Xóa"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="p-4 space-y-3">
+                    {/* Name and Size */}
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-white text-lg leading-tight">
+                        {m.name}
+                      </h3>
+                      {m.size && (
+                        <span className="text-sm text-gray-400 font-medium">
+                          {m.size}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Description */}
+                    {m.note && (
+                      <p className="text-sm text-gray-300 leading-relaxed line-clamp-2">
+                        {m.note}
+                      </p>
+                    )}
+
+                    {/* Price */}
+                    <div className="pt-2 border-t border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold text-green-400">
+                          {m.price.toLocaleString()}đ
+                        </span>
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs text-gray-400">Giá bán</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
-              {!filtered.length && <div className="text-gray-500">Không có món nào.</div>}
+              {!filtered.length && (
+                <div className="col-span-full flex flex-col items-center justify-center py-16">
+                  <svg className="w-20 h-20 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <h3 className="text-xl font-semibold text-gray-400 mb-2">Chưa có món ăn nào</h3>
+                  <p className="text-gray-500 text-center max-w-md">
+                    Hãy thêm món ăn đầu tiên để bắt đầu quản lý thực đơn của bạn
+                  </p>
+                </div>
+              )}
             </div>
           )
         ) : tab==='tables' ? (
@@ -322,17 +515,18 @@ export default function App() {
         ) : tab==='history' ? (
           <div className="p-6">
             <h2 className="text-xl font-semibold mb-4">Lịch sử bàn</h2>
-            <p className="text-gray-600">Tính năng đang được phát triển...</p>
+            <p className="text-gray-300">Tính năng đang được phát triển...</p>
           </div>
         ) : (
           <BookingsAdmin stats={stats} onStatsChange={setStats} token={token} />
         )}
-      </main>
+        </div>
+      </div>
 
       <Dialog open={open} onClose={() => setOpen(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-xl bg-white p-6 space-y-4">
+          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-xl bg-gray-800 p-6 space-y-4">
             <Dialog.Title className="text-lg font-semibold">{editingId ? 'Sửa món' : 'Thêm món'}</Dialog.Title>
 
             <div className="grid grid-cols-2 gap-4">
@@ -385,10 +579,10 @@ export default function App() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border">
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">
                 Hủy
               </button>
-              <button onClick={save} className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700">
+              <button onClick={save} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">
                 Lưu
               </button>
             </div>
@@ -513,33 +707,33 @@ function EmployeesAdmin() {
       {loading ? <div>Đang tải...</div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {employees.map(emp => (
-            <div key={emp._id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div key={emp._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-semibold">{emp.fullName}</div>
-                  <div className="text-sm text-gray-600">@{emp.username}</div>
-                  <div className="text-sm text-gray-500">{emp.email}</div>
+                  <div className="font-semibold text-white">{emp.fullName}</div>
+                  <div className="text-sm text-gray-300">@{emp.username}</div>
+                  <div className="text-sm text-gray-400">{emp.email}</div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${emp.role==='admin'?'bg-purple-100 text-purple-700':'bg-red-100 text-red-700'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded ${emp.role==='admin'?'bg-purple-600 text-purple-100':'bg-red-600 text-red-100'}`}>
                   {emp.role==='admin'?'Quản lý':'Nhân viên'}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-3">
-                <button onClick={() => startEdit(emp)} className="px-3 py-1.5 rounded-md border">Sửa</button>
-                <button onClick={() => remove(emp._id)} className="ml-auto p-2 rounded hover:bg-gray-100">
-                  <TrashIcon className="w-5 h-5 text-red-600" />
+                <button onClick={() => startEdit(emp)} className="px-3 py-1.5 rounded-md border border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Sửa</button>
+                <button onClick={() => remove(emp._id)} className="ml-auto p-2 rounded hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+                  <TrashIcon className="w-5 h-5 text-red-400" />
                 </button>
               </div>
             </div>
           ))}
-          {!employees.length && <div className="text-gray-500">Không có nhân viên nào.</div>}
+          {!employees.length && <div className="text-gray-400">Không có nhân viên nào.</div>}
         </div>
       )}
 
       <Dialog open={open} onClose={() => setOpen(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-white p-6 space-y-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
             <Dialog.Title className="text-lg font-semibold">{editingId ? 'Sửa nhân viên' : 'Thêm nhân viên'}</Dialog.Title>
             <div className="space-y-3">
               <div>
@@ -569,8 +763,8 @@ function EmployeesAdmin() {
               )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border">Hủy</button>
-              <button onClick={save} className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700">Lưu</button>
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">Hủy</button>
+              <button onClick={save} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">Lưu</button>
             </div>
           </Dialog.Panel>
         </div>
@@ -663,7 +857,7 @@ function CustomersAdmin() {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-red-100 rounded-lg">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -671,13 +865,13 @@ function CustomersAdmin() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Tổng khách hàng</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
+                <p className="text-sm font-medium text-gray-300">Tổng khách hàng</p>
+                <p className="text-2xl font-bold text-white">{stats.totalCustomers}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -685,13 +879,13 @@ function CustomersAdmin() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Hôm nay</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.newToday}</p>
+                <p className="text-sm font-medium text-gray-300">Hôm nay</p>
+                <p className="text-2xl font-bold text-white">{stats.newToday}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -699,8 +893,8 @@ function CustomersAdmin() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Tháng này</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.newThisMonth}</p>
+                <p className="text-sm font-medium text-gray-300">Tháng này</p>
+                <p className="text-2xl font-bold text-white">{stats.newThisMonth}</p>
               </div>
             </div>
           </div>
@@ -715,7 +909,7 @@ function CustomersAdmin() {
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
         />
-        <div className="text-sm text-gray-500">
+        <div className="text-sm text-gray-400">
           Tổng: {total} khách hàng
         </div>
       </div>
@@ -724,33 +918,33 @@ function CustomersAdmin() {
       {loading ? (
         <div className="text-center py-8">Đang tải...</div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Khách hàng</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Thông tin liên hệ</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ngày đăng ký</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Khách hàng</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thông tin liên hệ</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ngày đăng ký</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Trạng thái</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-gray-800 divide-y divide-gray-600">
                 {customers.map((customer) => (
-                  <tr key={customer._id} className="hover:bg-gray-50">
+                  <tr key={customer._id} className="hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{customer.fullName}</div>
-                        <div className="text-sm text-gray-500">@{customer.username}</div>
+                        <div className="text-sm font-medium text-white">{customer.fullName}</div>
+                        <div className="text-sm text-gray-400">@{customer.username}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{customer.email}</div>
+                      <div className="text-sm text-white">{customer.email}</div>
                       {customer.phone && (
-                        <div className="text-sm text-gray-500">{customer.phone}</div>
+                        <div className="text-sm text-gray-400">{customer.phone}</div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                       {new Date(customer.createdAt).toLocaleDateString('vi-VN')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -770,12 +964,12 @@ function CustomersAdmin() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-600 sm:px-6">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-500 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
                 >
                   Trước
                 </button>
@@ -798,14 +992,14 @@ function CustomersAdmin() {
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-500 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50"
                     >
                       Trước
                     </button>
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-500 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50"
                     >
                       Sau
                     </button>
@@ -816,7 +1010,7 @@ function CustomersAdmin() {
           )}
 
           {customers.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-400">
               Không có khách hàng nào.
             </div>
           )}
@@ -894,6 +1088,18 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
   const [total, setTotal] = useState(0);
   const [lastBookingCount, setLastBookingCount] = useState(0);
   const [showNewBookingAlert, setShowNewBookingAlert] = useState(false);
+  const [showNewBookingForm, setShowNewBookingForm] = useState(false);
+  const [newBookingForm, setNewBookingForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    tableId: '',
+    numberOfGuests: 1,
+    bookingDate: new Date().toISOString().split('T')[0],
+    bookingTime: new Date().toTimeString().slice(0, 5),
+    specialRequests: ''
+  });
+  const [tables, setTables] = useState<{_id: string; name: string; status: string}[]>([]);
 
   async function loadBookings() {
     setLoading(true);
@@ -934,10 +1140,57 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
     }
   }
 
+  async function loadTables() {
+    try {
+      const res = await axios.get(`${API}/api/tables`);
+      setTables(res.data);
+    } catch (error) {
+      console.error('Error loading tables:', error);
+    }
+  }
+
+  async function createNewBooking() {
+    if (!newBookingForm.customerName.trim()) {
+      toast.error('Vui lòng nhập tên khách hàng');
+      return;
+    }
+    if (!newBookingForm.tableId) {
+      toast.error('Vui lòng chọn bàn');
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API}/api/bookings/admin-quick-booking`, newBookingForm);
+      toast.success('Tạo booking thành công!');
+      setShowNewBookingForm(false);
+      setNewBookingForm({
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '',
+        tableId: '',
+        numberOfGuests: 1,
+        bookingDate: new Date().toISOString().split('T')[0],
+        bookingTime: new Date().toTimeString().slice(0, 5),
+        specialRequests: ''
+      });
+      loadBookings();
+      loadStats();
+    } catch (error: any) {
+      console.error('Error creating booking:', error);
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra khi tạo booking');
+    }
+  }
+
   useEffect(() => { 
     loadBookings();
     loadStats();
   }, [statusFilter, currentPage]);
+
+  useEffect(() => {
+    if (showNewBookingForm) {
+      loadTables();
+    }
+  }, [showNewBookingForm]);
 
   // Auto refresh bookings every 30 seconds
   useEffect(() => {
@@ -1052,7 +1305,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1060,13 +1313,13 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Chờ xác nhận</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+                <p className="text-sm font-medium text-gray-300">Chờ xác nhận</p>
+                <p className="text-2xl font-bold text-white">{stats.pending}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1074,13 +1327,13 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Đã xác nhận</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.confirmed}</p>
+                <p className="text-sm font-medium text-gray-300">Đã xác nhận</p>
+                <p className="text-2xl font-bold text-white">{stats.confirmed}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-red-100 rounded-lg">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1088,13 +1341,13 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Hôm nay</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.todayConfirmed}</p>
+                <p className="text-sm font-medium text-gray-300">Hôm nay</p>
+                <p className="text-2xl font-bold text-white">{stats.todayConfirmed}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
             <div className="flex items-center">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1102,8 +1355,8 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Tháng này</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.thisMonthConfirmed}</p>
+                <p className="text-sm font-medium text-gray-300">Tháng này</p>
+                <p className="text-2xl font-bold text-white">{stats.thisMonthConfirmed}</p>
               </div>
             </div>
           </div>
@@ -1135,7 +1388,13 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
         >
           🔄 Làm mới
         </button>
-        <div className="text-sm text-gray-500">
+        <button
+          onClick={() => setShowNewBookingForm(true)}
+          className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+        >
+          ➕ Tạo booking mới
+        </button>
+        <div className="text-sm text-gray-400">
           Tổng: {total} booking
         </div>
       </div>
@@ -1146,18 +1405,18 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
       ) : (
         <div className="space-y-4">
           {bookings.map((booking) => (
-            <div key={booking._id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div key={booking._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">
+                    <h3 className="text-lg font-semibold text-white">
                       {booking.customer?.fullName || booking.customerInfo?.fullName || 'Khách hàng'}
                     </h3>
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
                       {getStatusText(booking.status)}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-300">
                     <div>
                       <span className="font-medium">Bàn:</span> {booking.table?.name || 'N/A'}
                     </div>
@@ -1176,7 +1435,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                   <div className="text-lg font-bold text-red-600">
                     {booking.totalAmount.toLocaleString()}đ
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-400">
                     {new Date(booking.createdAt).toLocaleString('vi-VN')}
                   </div>
                 </div>
@@ -1184,7 +1443,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 
               {/* Menu Items */}
               <div className="mb-4">
-                <h4 className="font-medium text-gray-900 mb-2">Món đã đặt:</h4>
+                <h4 className="font-medium text-white mb-2">Món đã đặt:</h4>
                 <div className="space-y-1">
                   {booking.menuItems.map((item, index) => (
                     <div key={index} className="flex justify-between text-sm">
@@ -1196,7 +1455,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
               </div>
 
               {/* Contact Info */}
-              <div className="mb-4 text-sm text-gray-600">
+              <div className="mb-4 text-sm text-gray-300">
                 <div><span className="font-medium">Email:</span> {booking.customer?.email || booking.customerInfo?.email || 'N/A'}</div>
                 {(booking.customer?.phone || booking.customerInfo?.phone) && (
                   <div><span className="font-medium">Phone:</span> {booking.customer?.phone || booking.customerInfo?.phone}</div>
@@ -1222,7 +1481,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
               )}
 
               {booking.confirmedBy && (
-                <div className="text-sm text-gray-500 mt-2">
+                <div className="text-sm text-gray-400 mt-2">
                   Xác nhận bởi: {booking.confirmedBy.fullName} - {new Date(booking.confirmedAt!).toLocaleString('vi-VN')}
                 </div>
               )}
@@ -1230,7 +1489,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
           ))}
 
           {bookings.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-400">
               Không có booking nào.
             </div>
           )}
@@ -1244,7 +1503,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
             <button
               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-2 border border-gray-500 rounded-md text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
             >
               Trước
             </button>
@@ -1254,10 +1513,146 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
             <button
               onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-2 border border-gray-500 rounded-md text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
             >
               Sau
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* New Booking Form Modal */}
+      {showNewBookingForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Tạo booking mới</h2>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tên khách hàng *
+                  </label>
+                  <input
+                    type="text"
+                    value={newBookingForm.customerName}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerName: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nhập tên khách hàng"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    value={newBookingForm.customerPhone}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerPhone: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nhập số điện thoại"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newBookingForm.customerEmail}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerEmail: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nhập email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Chọn bàn *
+                  </label>
+                  <select
+                    value={newBookingForm.tableId}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, tableId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Chọn bàn</option>
+                    {tables.filter(table => table.status === 'empty').map((table) => (
+                      <option key={table._id} value={table._id}>
+                        Bàn {table.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Số khách *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={newBookingForm.numberOfGuests}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, numberOfGuests: parseInt(e.target.value) || 1 }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ngày đặt bàn *
+                  </label>
+                  <input
+                    type="date"
+                    value={newBookingForm.bookingDate}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, bookingDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Giờ đặt bàn *
+                  </label>
+                  <input
+                    type="time"
+                    value={newBookingForm.bookingTime}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, bookingTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Yêu cầu đặc biệt
+                </label>
+                <textarea
+                  value={newBookingForm.specialRequests}
+                  onChange={(e) => setNewBookingForm(prev => ({ ...prev, specialRequests: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  placeholder="Nhập yêu cầu đặc biệt (nếu có)"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setShowNewBookingForm(false)}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={createNewBooking}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Tạo booking
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1339,7 +1734,14 @@ function TablesAdmin() {
   }
 
   async function resetAllTables() {
-    if (!confirm('Bạn có chắc chắn muốn trả tất cả bàn? Tất cả dữ liệu món ăn/nước sẽ bị xóa!')) return;
+    const occupiedCount = items.filter(t => t.status === 'occupied').length;
+    
+    if (occupiedCount === 0) {
+      toast.info('Không có bàn nào đang được sử dụng để reset!');
+      return;
+    }
+    
+    if (!confirm(`Bạn có chắc chắn muốn trả ${occupiedCount} bàn? Tất cả dữ liệu món ăn/nước sẽ bị xóa!`)) return;
     
     try {
       setLoading(true);
@@ -1347,11 +1749,20 @@ function TablesAdmin() {
       // Gọi API reset tất cả bàn
       const response = await axios.post(`${API}/api/tables/reset-all`);
       
-      toast.success(`Đã trả ${response.data.resetCount} bàn thành công! Xóa ${response.data.deletedOrdersCount} món ăn/nước.`);
-      await load();
-    } catch (error) {
+      if (response.data.success) {
+        if (response.data.resetCount > 0) {
+          toast.success(`Đã trả ${response.data.resetCount} bàn thành công! Xóa ${response.data.deletedOrdersCount} món ăn/nước.`);
+        } else {
+          toast.info(response.data.message);
+        }
+        await load();
+      } else {
+        toast.error(response.data.message || 'Có lỗi xảy ra khi trả bàn!');
+      }
+    } catch (error: any) {
       console.error('Error resetting tables:', error);
-      toast.error('Có lỗi xảy ra khi trả bàn!');
+      const errorMessage = error.response?.data?.error || error.message || 'Có lỗi xảy ra khi trả bàn!';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1373,9 +1784,9 @@ function TablesAdmin() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+        <div className="inline-flex rounded-md border border-gray-600 overflow-hidden">
           {(['all','empty','occupied'] as const).map(k => (
-            <button key={k} onClick={()=>setFilter(k as 'all'|'empty'|'occupied')} className={`px-3 py-1.5 ${filter===k?'bg-red-600 text-white':'bg-white'}`}>{k==='all'?'Tất cả':k==='empty'?'Bàn trống':'Đang dùng'}</button>
+            <button key={k} onClick={()=>setFilter(k as 'all'|'empty'|'occupied')} className={`px-3 py-1.5 rounded-md transition-colors ${filter===k?'bg-red-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{k==='all'?'Tất cả':k==='empty'?'Bàn trống':'Đang dùng'}</button>
           ))}
         </div>
         <div className="ml-auto flex gap-2">
@@ -1395,37 +1806,37 @@ function TablesAdmin() {
       {loading ? <div>Đang tải...</div> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map(t => (
-            <div key={t._id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+            <div key={t._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-semibold">{t.name} <span className="text-gray-400">#{t._id}</span></div>
-                  {t.note && <div className="text-sm text-gray-600">{t.note}</div>}
+                  <div className="font-semibold text-white">{t.name} <span className="text-gray-400">#{t._id}</span></div>
+                  {t.note && <div className="text-sm text-gray-300">{t.note}</div>}
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='empty'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='empty'?'bg-green-600 text-green-100':'bg-amber-600 text-amber-100'}`}>
                   {t.status==='empty'?'Bàn trống':'Đang dùng'}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-3">
-                <button onClick={()=>openDetails(t)} className="px-3 py-1.5 rounded-md border">Thông tin bàn</button>
+                <button onClick={()=>openDetails(t)} className="px-3 py-1.5 rounded-md border border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Thông tin bàn</button>
                 {t.status !== 'empty' && (
-                  <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border">
+                  <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border border-red-500 text-red-300 hover:bg-red-600 hover:text-white transition-colors">
                     Trả bàn
                   </button>
                 )}
-                <button onClick={()=>remove(t._id)} className="ml-auto p-2 rounded hover:bg-gray-100">
-                  <TrashIcon className="w-5 h-5 text-red-600" />
+                <button onClick={()=>remove(t._id)} className="ml-auto p-2 rounded hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+                  <TrashIcon className="w-5 h-5 text-red-400" />
                 </button>
               </div>
             </div>
           ))}
-          {!items.length && <div className="text-gray-500">Không có bàn.</div>}
+          {!items.length && <div className="text-gray-400">Không có bàn.</div>}
         </div>
       )}
 
       <Dialog open={open} onClose={()=>setOpen(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-white p-6 space-y-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
             <Dialog.Title className="text-lg font-semibold">Tạo bàn</Dialog.Title>
             <div className="space-y-3">
               <div>
@@ -1438,8 +1849,8 @@ function TablesAdmin() {
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={()=>setOpen(false)} className="px-4 py-2 rounded-md border">Hủy</button>
-              <button onClick={create} className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700">Tạo</button>
+              <button onClick={()=>setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">Hủy</button>
+              <button onClick={create} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">Tạo</button>
             </div>
           </Dialog.Panel>
         </div>
@@ -1449,14 +1860,14 @@ function TablesAdmin() {
       <Dialog open={detailOpen} onClose={()=>setDetailOpen(false)} className="relative z-50">
         <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-xl bg-white p-6 space-y-4">
+          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-xl bg-gray-800 p-6 space-y-4">
             <Dialog.Title className="text-lg font-semibold">Thông tin bàn {detailFor ? detailFor.name : ''} {detailFor ? `#${detailFor._id}` : ''}</Dialog.Title>
             {detailLoading ? (
               <div>Đang tải...</div>
             ) : (
               <div className="space-y-3">
                 {(detailOrder?.items?.length ?? 0) === 0 ? (
-                  <div className="text-gray-500">Chưa có món nào được order.</div>
+                  <div className="text-gray-400">Chưa có món nào được order.</div>
                 ) : (
                   <div className="divide-y">
                     {detailOrder!.items.map((it, idx) => (
@@ -1482,19 +1893,6 @@ function TablesAdmin() {
         </div>
       </Dialog>
 
-      {/* Quick Booking Modal */}
-      <QuickBookingModal
-        isOpen={quickBookingModal}
-        onClose={() => setQuickBookingModal(false)}
-        onBookingSuccess={() => {
-          // Refresh bookings data
-          if (tab === 'bookings') {
-            // Trigger refresh for bookings tab
-            window.location.reload();
-          }
-        }}
-        API={API}
-      />
     </div>
   );
 }

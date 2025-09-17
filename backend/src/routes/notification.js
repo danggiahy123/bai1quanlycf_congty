@@ -65,8 +65,15 @@ router.post('/:id/read', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Tìm thông báo cá nhân hoặc thông báo chung
     const notification = await Notification.findOneAndUpdate(
-      { _id: id, user: req.user.id },
+      { 
+        _id: id, 
+        $or: [
+          { user: req.user.id },
+          { user: null } // Thông báo chung
+        ]
+      },
       { isRead: true, readAt: new Date() },
       { new: true }
     );
@@ -104,7 +111,10 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     const notification = await Notification.findOneAndDelete({
       _id: id,
-      user: req.user.id
+      $or: [
+        { user: req.user.id },
+        { user: null } // Thông báo chung
+      ]
     });
 
     if (!notification) {
@@ -224,7 +234,7 @@ router.get('/general', async (req, res) => {
   }
 });
 
-// Lấy thông báo cho khách hàng
+// Lấy thông báo cho khách hàng (cá nhân + chung)
 router.get('/customer', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -233,15 +243,29 @@ router.get('/customer', authenticateToken, async (req, res) => {
     console.log('🔍 Debug customer notification API:');
     console.log('User ID from token:', req.user.id);
     
-    const notifications = await Notification.find({ user: req.user.id })
+    // Lấy cả thông báo cá nhân và thông báo chung (user = null)
+    const notifications = await Notification.find({ 
+      $or: [
+        { user: req.user.id },
+        { user: null } // Thông báo chung cho tất cả khách hàng
+      ]
+    })
       .populate('bookingId', 'table numberOfGuests bookingDate bookingTime totalAmount status')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Notification.countDocuments({ user: req.user.id });
+    const total = await Notification.countDocuments({ 
+      $or: [
+        { user: req.user.id },
+        { user: null }
+      ]
+    });
     const unreadCount = await Notification.countDocuments({ 
-      user: req.user.id, 
+      $or: [
+        { user: req.user.id },
+        { user: null }
+      ],
       isRead: false 
     });
 

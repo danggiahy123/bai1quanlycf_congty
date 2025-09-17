@@ -138,30 +138,50 @@ router.post('/:id/free', async (req, res) => {
 // Reset all tables to empty status
 router.post('/reset-all', async (req, res) => {
   try {
+    console.log('Starting reset all tables...');
+    
     // Lấy tất cả bàn đang occupied
     const occupiedTables = await Table.find({ status: 'occupied' });
+    console.log(`Found ${occupiedTables.length} occupied tables`);
+    
+    if (occupiedTables.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: 'Không có bàn nào đang được sử dụng để reset',
+        resetCount: 0,
+        deletedOrdersCount: 0
+      });
+    }
+    
     const tableIds = occupiedTables.map(t => t._id);
+    console.log('Table IDs to reset:', tableIds);
     
     // Xóa tất cả order liên quan đến các bàn này
     const deletedOrders = await Order.deleteMany({ tableId: { $in: tableIds } });
     console.log(`Đã xóa ${deletedOrders.deletedCount} order của ${tableIds.length} bàn`);
     
     // Reset tất cả về empty
-    await Table.updateMany({ status: 'occupied' }, { status: 'empty' });
+    const updateResult = await Table.updateMany({ status: 'occupied' }, { status: 'empty' });
+    console.log(`Updated ${updateResult.modifiedCount} tables to empty status`);
     
     // Log history cho từng bàn
     for (const table of occupiedTables) {
-      await logTableHistory(
-        table._id, 
-        table.name, 
-        'FREED', 
-        req.body.performedBy || 'admin', 
-        req.body.performedByName || 'Admin',
-        { 
-          note: 'Reset tất cả bàn',
-          deletedOrdersCount: deletedOrders.deletedCount
-        }
-      );
+      try {
+        await logTableHistory(
+          table._id, 
+          table.name, 
+          'FREED', 
+          req.body.performedBy || 'admin', 
+          req.body.performedByName || 'Admin',
+          { 
+            note: 'Reset tất cả bàn',
+            deletedOrdersCount: deletedOrders.deletedCount
+          }
+        );
+      } catch (logError) {
+        console.error(`Error logging history for table ${table.name}:`, logError);
+        // Không throw error, chỉ log để không làm gián đoạn quá trình
+      }
     }
     
     res.json({ 
@@ -172,7 +192,12 @@ router.post('/reset-all', async (req, res) => {
     });
   } catch (err) {
     console.error('Error resetting all tables:', err);
-    res.status(500).json({ error: err.message });
+    console.error('Error details:', err.message);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ 
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 });
 
