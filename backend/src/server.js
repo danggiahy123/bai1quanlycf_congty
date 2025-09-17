@@ -5,11 +5,21 @@ const cors = require('cors');
 // Removed upload support to keep API simple (use external image URLs)
 
 const menuRouter = require('./routes/menu');
+const tableRouter = require('./routes/table');
+const orderRouter = require('./routes/order');
+const employeeRouter = require('./routes/employee');
+const customerRouter = require('./routes/customer');
+const bookingRouter = require('./routes/booking');
+const notificationRouter = require('./routes/notification');
+const tableHistoryRouter = require('./routes/tableHistory');
 
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: true, // Cho phép tất cả origin
+  credentials: true
+}));
 app.use(express.json());
 
 // Serve static files (uploaded images)
@@ -17,12 +27,25 @@ app.use(express.json());
 
 // Routes
 app.use('/api/menu', menuRouter);
+app.use('/api/tables', tableRouter);
+app.use('/api/orders', orderRouter);
+app.use('/api/employees', employeeRouter);
+app.use('/api/customers', customerRouter);
+app.use('/api/bookings', bookingRouter);
+app.use('/api/notifications', notificationRouter);
+app.use('/api/table-history', tableHistoryRouter);
 
 // Removed /api/upload endpoint
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  console.log('🏥 Health check - server is running with latest code');
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Test bookings route
+app.get('/api/bookings-test', (req, res) => {
+  res.json({ message: 'Bookings route test - server updated!' });
 });
 
 // Debug: xem thông tin kết nối MongoDB hiện tại
@@ -51,7 +74,7 @@ async function start() {
       autoIndex: true,
     });
     console.log('Connected to MongoDB');
-    app.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`Server listening on http://0.0.0.0:${PORT}`));
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

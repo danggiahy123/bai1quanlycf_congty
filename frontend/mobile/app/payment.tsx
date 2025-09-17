@@ -4,10 +4,15 @@ import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
+import { useTables } from '@/components/tables-context';
+import { DEFAULT_API_URL } from '@/constants/api';
 
 export default function PaymentScreen() {
   const router = useRouter();
-  const { totalAmount, clearOrder } = useOrder();
+  const { state, totalAmount, clearOrder } = useOrder();
+  const { freeTable } = useTables();
+  
+  const API_URL = DEFAULT_API_URL;
   const [cash, setCash] = useState('');
   const [method, setMethod] = useState<'cash' | 'transfer'>('cash');
 
@@ -16,7 +21,14 @@ export default function PaymentScreen() {
     return Math.max(0, paid - totalAmount);
   }, [cash, totalAmount]);
 
-  const pay = () => {
+  const pay = async () => {
+    const tableId = state.tableId;
+    if (tableId) {
+      try {
+        await fetch(`${API_URL}/api/orders/by-table/${tableId}/pay`, { method: 'POST' });
+      } catch {}
+      freeTable(tableId);
+    }
     clearOrder();
     router.replace('/payment-success');
   };

@@ -6,13 +6,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
 import { TouchableOpacity as Btn } from 'react-native';
+import { DEFAULT_API_URL } from '@/constants/api';
 
 export default function SelectItemsScreen() {
   const router = useRouter();
   const { state, addItem, updateItemQuantity, removeItem, totalAmount } = useOrder();
 
-  const API_URL = (process.env.EXPO_PUBLIC_API_URL as string) || 'http://localhost:5000';
-  const [menu, setMenu] = useState<{ id: string; name: string; price: number; image?: string; note?: string; size?: string[] }[]>([]);
+  const API_URL = DEFAULT_API_URL;
+  const [menu, setMenu] = useState<{ id: string; name: string; price: number; image?: string; note?: string }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +32,6 @@ export default function SelectItemsScreen() {
           price: Number(m.price ?? 0),
           image: m.image ? String(m.image) : undefined,
           note: m.note ? String(m.note) : undefined,
-          size: Array.isArray(m.size) ? m.size.map((s: any) => String(s)) : (m.size ? [String(m.size)] : []),
         }));
         if (mounted) setMenu(mapped);
       } catch (e: any) {
@@ -80,9 +80,9 @@ export default function SelectItemsScreen() {
             )}
             <View style={{ flex: 1 }}>
               <ThemedText type="defaultSemiBold" style={{ color: '#000' }}>
-                {m.name}{m.size && m.size.length ? ` • ${m.size.join('/')}` : ''}
+                {m.name}
               </ThemedText>
-              <ThemedText style={{ color: '#2563eb', marginTop: 2 }}>{m.price.toLocaleString()}đ</ThemedText>
+              <ThemedText style={{ color: '#16a34a', marginTop: 2 }}>{m.price.toLocaleString()}đ</ThemedText>
               {!!m.note && <ThemedText style={{ color: '#6b7280', marginTop: 2 }} numberOfLines={1}>{m.note}</ThemedText>}
             </View>
             <View style={styles.actions}>
@@ -111,7 +111,7 @@ export default function SelectItemsScreen() {
 
       <View style={styles.footer}>
         <ThemedText type="defaultSemiBold">Tổng: {totalAmount.toLocaleString()}đ</ThemedText>
-        <TouchableOpacity style={styles.nextBtn} onPress={() => router.push('/order-confirm')} disabled={state.items.length === 0}>
+        <TouchableOpacity style={styles.nextBtn} onPress={() => router.push('/select-datetime')} disabled={state.items.length === 0}>
           <ThemedText style={{ color: '#fff' }}>Xác nhận</ThemedText>
         </TouchableOpacity>
       </View>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   menu: { gap: 10, marginTop: 8 },
   menuItem: { flexDirection: 'row', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#e5e7eb', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1, borderRadius: 12, padding: 12, gap: 12 },
   actions: { },
-  addBtn: { backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
+  addBtn: { backgroundColor: '#16a34a', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: '#aaa', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   removeBtn: { backgroundColor: '#ef4444', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 },

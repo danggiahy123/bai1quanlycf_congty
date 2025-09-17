@@ -7,17 +7,6 @@ const MenuSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   image: { type: String },
   note: { type: String },
-  // Chấp nhận gửi 'size' là chuỗi hoặc mảng, tự ép về mảng
-  size: {
-    type: [String],
-    enum: ['S', 'M', 'L'],
-    default: ['M'],
-    set: (value) => {
-      if (Array.isArray(value)) return value;
-      if (value === undefined || value === null || value === '') return [];
-      return [value];
-    },
-  },
   available: { type: Boolean, default: true }
 });
 

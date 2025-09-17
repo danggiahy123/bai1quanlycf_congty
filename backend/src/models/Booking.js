@@ -1,0 +1,84 @@
+const mongoose = require('mongoose');
+
+const bookingSchema = new mongoose.Schema({
+  customer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: true
+  },
+  table: {
+    type: String,
+    ref: 'Table',
+    required: true
+  },
+  numberOfGuests: {
+    type: Number,
+    required: true,
+    min: 1
+  },
+  bookingDate: {
+    type: Date,
+    required: true
+  },
+  bookingTime: {
+    type: String, // Format: "HH:MM"
+    required: true
+  },
+  menuItems: [{
+    item: {
+      type: String,
+      ref: 'Menu',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    size: {
+      type: String,
+      default: 'M'
+    },
+    price: {
+      type: Number,
+      required: true
+    }
+  }],
+  totalAmount: {
+    type: Number,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+    default: 'pending'
+  },
+  notes: {
+    type: String,
+    trim: true
+  },
+  confirmedBy: {
+    type: String,
+    ref: 'Employee'
+  },
+  confirmedAt: {
+    type: Date
+  },
+  completedAt: {
+    type: Date
+  },
+  customerInfo: {
+    fullName: String,
+    phone: String,
+    email: String
+  }
+}, {
+  timestamps: true
+});
+
+// Index for better query performance
+bookingSchema.index({ bookingDate: 1, table: 1 });
+bookingSchema.index({ customer: 1, createdAt: -1 });
+bookingSchema.index({ status: 1 });
+
+module.exports = mongoose.model('Booking', bookingSchema);
