@@ -17,6 +17,19 @@ type PaymentTable = {
     }>;
     totalAmount: number;
   };
+  booking?: {
+    _id: string;
+    customerInfo?: {
+      fullName: string;
+      phone: string;
+    };
+    numberOfGuests: number;
+    bookingDate: string;
+    bookingTime: string;
+    totalAmount: number;
+    depositAmount?: number;
+    status: string;
+  };
 };
 
 export default function PaymentsAdmin() {
@@ -28,10 +41,14 @@ export default function PaymentsAdmin() {
     isOpen: boolean;
     tableId: string;
     totalAmount: number;
+    depositAmount: number;
+    orderAmount: number;
   }>({
     isOpen: false,
     tableId: '',
-    totalAmount: 0
+    totalAmount: 0,
+    depositAmount: 0,
+    orderAmount: 0
   });
 
   async function loadTables() {
@@ -42,13 +59,26 @@ export default function PaymentsAdmin() {
         res.data.map(async (table) => {
           if (table.status === 'occupied') {
             try {
+              // Lấy thông tin order
               const orderRes = await axios.get(`${API}/api/orders/by-table/${table._id}`);
-              return { ...table, order: orderRes.data };
+              const order = orderRes.data;
+              
+              // Lấy thông tin booking
+              let booking = null;
+              try {
+                const bookingRes = await axios.get(`${API}/api/bookings/by-table/${table._id}`);
+                booking = bookingRes.data;
+                console.log('Booking data for table', table._id, ':', booking);
+              } catch (bookingError) {
+                console.log('No booking found for table:', table._id);
+              }
+              
+              return { ...table, order, booking };
             } catch (error) {
-              return { ...table, order: null };
+              return { ...table, order: null, booking: null };
             }
           }
-          return { ...table, order: null };
+          return { ...table, order: null, booking: null };
         })
       );
       setTables(tablesWithOrders);
@@ -69,11 +99,13 @@ export default function PaymentsAdmin() {
     }
   }
 
-  const handleQRPayment = (tableId: string, totalAmount: number) => {
+  const handleQRPayment = (tableId: string, totalAmount: number, depositAmount: number = 0, orderAmount: number = 0) => {
     setPaymentModal({
       isOpen: true,
       tableId,
-      totalAmount
+      totalAmount,
+      depositAmount,
+      orderAmount
     });
   };
 
@@ -83,8 +115,31 @@ export default function PaymentsAdmin() {
     setPaymentModal({
       isOpen: false,
       tableId: '',
-      totalAmount: 0
+      totalAmount: 0,
+      depositAmount: 0,
+      orderAmount: 0
     });
+  };
+
+  // Xử lý trả bàn
+  const handleReturnTable = async (tableId: string, tableName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn trả bàn ${tableName}?\n\n⚠️ Hành động này sẽ:\n- Xóa dữ liệu order chưa thanh toán\n- Hủy booking liên quan\n- Giải phóng bàn ngay lập tức`)) {
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API}/api/tables/${tableId}/return`, {
+        performedBy: 'admin',
+        performedByName: 'Admin'
+      });
+      
+      if (response.data.success) {
+        toast.success(`✅ Đã trả bàn ${tableName} thành công!`);
+        await loadTables();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Có lỗi xảy ra khi trả bàn');
+    }
   };
 
   useEffect(() => {
@@ -190,40 +245,99 @@ export default function PaymentsAdmin() {
                 </span>
               </div>
 
-              {table.status === 'occupied' && table.order && (
+              {table.status === 'occupied' && (
                 <div className="mb-4">
-                  <h4 className="font-medium text-gray-900 mb-2">Đơn hàng:</h4>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {table.order.items.map((item, index) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span>{item.name} x{item.quantity}</span>
-                        <span className="font-medium">{(item.price * item.quantity).toLocaleString()}đ</span>
+                  {/* Thông tin booking */}
+                  {table.booking && (
+                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Thông tin đặt bàn
+                      </h4>
+                      <div className="text-sm space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Khách hàng:</span>
+                          <span className="font-medium">{table.booking.customerInfo?.fullName || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Số người:</span>
+                          <span className="font-medium">{table.booking.numberOfGuests} người</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Thời gian:</span>
+                          <span className="font-medium">{table.booking.bookingTime}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Số tiền cọc:</span>
+                          <span className="font-bold text-orange-600">
+                            {table.booking.depositAmount ? table.booking.depositAmount.toLocaleString() : '0'}đ
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                    <span className="font-semibold">Tổng cộng:</span>
-                    <span className="font-bold text-lg text-red-600">
-                      {table.order.totalAmount.toLocaleString()}đ
-                    </span>
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Thông tin đơn hàng */}
+                  {table.order && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Đơn hàng:</h4>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {table.order.items.map((item, index) => (
+                          <div key={index} className="flex justify-between text-sm">
+                            <span>{item.name} x{item.quantity}</span>
+                            <span className="font-medium">{(item.price * item.quantity).toLocaleString()}đ</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-1 pt-2 border-t border-gray-200 mt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold">Tổng đơn hàng:</span>
+                          <span className="font-bold text-lg text-red-600">
+                            {table.order.totalAmount.toLocaleString()}đ
+                          </span>
+                        </div>
+                        {table.booking?.depositAmount && table.booking.depositAmount > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-orange-600">Số tiền cọc:</span>
+                            <span className="font-bold text-lg text-orange-600">
+                              {table.booking.depositAmount.toLocaleString()}đ
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-gray-300">
+                          <span className="font-bold text-lg">Tổng thanh toán:</span>
+                          <span className="font-bold text-xl text-green-600">
+                            {((table.order.totalAmount || 0) + (table.booking?.depositAmount || 0)).toLocaleString()}đ
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="flex gap-2">
                 {table.status === 'occupied' ? (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full">
                     <button
-                      onClick={() => processPayment(table._id)}
-                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                      onClick={() => {
+                        const orderAmount = table.order?.totalAmount || 0;
+                        const depositAmount = table.booking?.depositAmount || 0;
+                        const totalAmount = orderAmount + depositAmount;
+                        handleQRPayment(table._id, totalAmount, depositAmount, orderAmount);
+                      }}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                     >
-                      ✅ Xác nhận
+                      💳 THANH TOÁN NGAY
                     </button>
                     <button
-                      onClick={() => handleQRPayment(table._id, table.order?.totalAmount || 0)}
-                      className="flex-1 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                      onClick={() => handleReturnTable(table._id, table.name)}
+                      className="px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                      title="Trả bàn - xóa dữ liệu chưa thanh toán"
                     >
-                      💳 QR Code
+                      🔄 TRẢ BÀN
                     </button>
                   </div>
                 ) : (
@@ -246,10 +360,12 @@ export default function PaymentsAdmin() {
       {/* Payment Modal */}
       <PaymentModal
         isOpen={paymentModal.isOpen}
-        onClose={() => setPaymentModal({ isOpen: false, tableId: '', totalAmount: 0 })}
+        onClose={() => setPaymentModal({ isOpen: false, tableId: '', totalAmount: 0, depositAmount: 0, orderAmount: 0 })}
         onPaymentSuccess={handlePaymentSuccess}
         tableId={paymentModal.tableId}
         totalAmount={paymentModal.totalAmount}
+        depositAmount={paymentModal.depositAmount}
+        orderAmount={paymentModal.orderAmount}
         API={API}
       />
     </div>

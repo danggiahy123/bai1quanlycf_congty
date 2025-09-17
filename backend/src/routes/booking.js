@@ -6,6 +6,7 @@ const Table = require('../models/Table');
 const Menu = require('../models/Menu');
 const Employee = require('../models/Employee');
 const Notification = require('../models/Notification');
+const TransactionHistory = require('../models/TransactionHistory');
 const router = express.Router();
 
 // Middleware để xác thực token
@@ -33,12 +34,19 @@ router.post('/', authenticateToken, async (req, res) => {
       bookingDate, 
       bookingTime, 
       menuItems, 
-      notes 
+      notes,
+      depositAmount 
     } = req.body;
 
-    // Kiểm tra thông tin bắt buộc
-    if (!tableId || !numberOfGuests || !bookingDate || !bookingTime || !menuItems) {
-      return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
+    // Kiểm tra thông tin bắt buộc - BẮT BUỘC PHẢI CÓ CỌC
+    if (!tableId || !numberOfGuests || !bookingDate || !bookingTime || !menuItems || !depositAmount || parseInt(depositAmount) <= 0) {
+      return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin và chọn số tiền cọc (tối thiểu 50,000đ)' });
+    }
+
+    // Kiểm tra số tiền cọc tối thiểu
+    const parsedDepositAmount = parseInt(depositAmount);
+    if (parsedDepositAmount < 50000) {
+      return res.status(400).json({ message: 'Số tiền cọc tối thiểu là 50,000đ' });
     }
 
     // Kiểm tra bàn có tồn tại
@@ -47,15 +55,16 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy bàn' });
     }
 
-    // Kiểm tra xem bàn có booking nào đang pending hoặc confirmed không
+    // Kiểm tra xem bàn có booking nào đang pending hoặc confirmed không trong cùng thời gian
     const existingBooking = await Booking.findOne({
       table: tableId,
       status: { $in: ['pending', 'confirmed'] },
-      bookingDate: new Date(bookingDate)
+      bookingDate: new Date(bookingDate),
+      bookingTime: bookingTime
     });
 
     if (existingBooking) {
-      return res.status(400).json({ message: 'Bàn đã được đặt trong ngày này' });
+      return res.status(400).json({ message: 'Bàn này đã được đặt trong khoảng thời gian này' });
     }
 
     // Tạm thời bỏ qua kiểm tra thời gian để hệ thống hoạt động
@@ -105,7 +114,9 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy thông tin người dùng' });
     }
 
-    // Tạo booking
+    // Tạo booking - depositAmount đã được validate ở trên
+    console.log('Creating booking with depositAmount:', parsedDepositAmount, 'from input:', depositAmount);
+    
     const booking = new Booking({
       customer: req.user.id,
       table: tableId,
@@ -114,6 +125,7 @@ router.post('/', authenticateToken, async (req, res) => {
       bookingTime,
       menuItems: processedMenuItems,
       totalAmount,
+      depositAmount: parsedDepositAmount,
       notes,
       customerInfo: {
         fullName: customer.fullName,
@@ -124,48 +136,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await booking.save();
 
-    // Gửi thông báo cho khách hàng
-    try {
-      const customerNotification = new Notification({
-        user: booking.customer,
-        type: 'booking_pending',
-        title: 'Đặt bàn thành công!',
-        message: `Bạn đã đặt bàn ${table.name} cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. Tổng tiền: ${totalAmount.toLocaleString()}đ. Đang chờ nhân viên xác nhận.`,
-        bookingId: booking._id,
-        isRead: false
-      });
-      
-      await customerNotification.save();
-      console.log('Đã gửi thông báo cho khách hàng về đặt bàn thành công');
-    } catch (customerNotificationError) {
-      console.error('Lỗi gửi thông báo cho khách hàng:', customerNotificationError);
-    }
-
-    // Gửi thông báo cho tất cả nhân viên
-    try {
-      const employees = await Employee.find({});
-      
-      for (const employee of employees) {
-        const notification = new Notification({
-          user: employee._id,
-          type: 'booking_pending',
-          title: 'Đặt bàn mới cần xác nhận',
-          message: `Khách hàng ${customer.fullName} đã đặt bàn ${table.name} cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. Tổng tiền: ${totalAmount.toLocaleString()}đ. Vui lòng xác nhận.`,
-          bookingId: booking._id,
-          isRead: false
-        });
-        
-        await notification.save();
-      }
-      
-      console.log(`Đã gửi thông báo cho ${employees.length} nhân viên về booking mới`);
-    } catch (notificationError) {
-      console.error('Lỗi gửi thông báo cho nhân viên:', notificationError);
-      // Không fail booking nếu gửi thông báo lỗi
-    }
+    // KHÔNG gửi thông báo ngay khi tạo booking có cọc
+    // Thông báo chỉ được gửi sau khi cọc thành công
+    console.log('Booking đã được tạo, chờ thanh toán cọc để gửi thông báo');
 
     res.status(201).json({
-      message: 'Đặt bàn thành công, đang chờ xác nhận',
+      message: 'Đặt bàn thành công, vui lòng thanh toán cọc',
       booking: {
         id: booking._id,
         tableName: table.name,
@@ -173,6 +149,7 @@ router.post('/', authenticateToken, async (req, res) => {
         bookingDate: booking.bookingDate,
         bookingTime: booking.bookingTime,
         totalAmount: booking.totalAmount,
+        depositAmount: booking.depositAmount,
         status: booking.status
       }
     });
@@ -244,7 +221,7 @@ router.get('/admin', async (req, res) => {
 router.post('/:id/confirm', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { notes } = req.body || {};
+    const { notes, paymentMethod = 'cash', depositAmount } = req.body || {};
 
     const booking = await Booking.findById(id);
 
@@ -266,23 +243,60 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
 
     await booking.save();
 
-    // Cập nhật trạng thái bàn thành ĐÃ ĐƯỢC ĐẶT
+    // Cập nhật trạng thái bàn thành occupied
     const table = await Table.findById(booking.table);
     if (table) {
-      table.status = 'ĐÃ ĐƯỢC ĐẶT';
+      table.status = 'occupied';
       await table.save();
     }
 
-    // Tạo thông báo cho khách hàng
-    const customerNotification = new Notification({
-      user: booking.customer,
-      type: 'booking_confirmed',
-      title: 'Đặt bàn đã được xác nhận!',
-      message: `Bàn ${table ? table.name : 'N/A'} đã được xác nhận cho ngày ${booking.bookingDate.toLocaleDateString('vi-VN')} lúc ${booking.bookingTime}. Bạn có thể thanh toán khi đến nhà hàng.`,
-      bookingId: booking._id,
-      isRead: false
-    });
-    await customerNotification.save();
+    // Tạo lịch sử giao dịch nếu có cọc tiền
+    if (booking.depositAmount > 0) {
+      try {
+        const transaction = new TransactionHistory({
+          bookingId: booking._id,
+          tableId: booking.table,
+          tableName: table?.name || `Bàn ${booking.table}`,
+          customerId: booking.customer,
+          customerInfo: booking.customerInfo,
+          transactionType: 'deposit',
+          amount: booking.depositAmount,
+          paymentMethod: paymentMethod,
+          status: 'completed',
+          bankInfo: paymentMethod === 'bank_transfer' ? {
+            accountNumber: '2246811357',
+            accountName: 'DANG GIA HY',
+            bankName: 'Techcombank',
+            bankCode: '970407'
+          } : null,
+          transactionId: 'TXN_' + Date.now(),
+          paidAt: new Date(),
+          confirmedAt: new Date(),
+          notes: `Thanh toán cọc bàn ${table?.name || booking.table} - ${paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}`
+        });
+
+        await transaction.save();
+        console.log('✅ Đã tạo lịch sử giao dịch cọc:', transaction._id);
+      } catch (transactionError) {
+        console.error('Lỗi tạo lịch sử giao dịch:', transactionError);
+      }
+    }
+
+    // Tạo thông báo cho khách hàng - chỉ gửi nếu có cọc tiền
+    if (booking.depositAmount > 0) {
+      const customerNotification = new Notification({
+        user: booking.customer,
+        type: 'booking_confirmed',
+        title: '🎉 Đặt bàn đã được xác nhận!',
+        message: `Bàn ${table ? table.name : 'N/A'} đã được xác nhận cho ngày ${booking.bookingDate.toLocaleDateString('vi-VN')} lúc ${booking.bookingTime}. Số tiền cọc: ${booking.depositAmount.toLocaleString()}đ (${paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}). Bạn có thể thanh toán khi đến nhà hàng.`,
+        bookingId: booking._id,
+        isRead: false
+      });
+      await customerNotification.save();
+      console.log('✅ Đã gửi thông báo xác nhận cọc cho khách hàng');
+    } else {
+      console.log('ℹ️ Không có cọc tiền, không gửi thông báo cho khách hàng');
+    }
 
     // Gửi thông báo cho nhân viên khác về việc xác nhận
     try {
@@ -308,7 +322,7 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
 
     // Gửi thông báo cho admin về việc nhân viên xác nhận đặt bàn
     try {
-      const admins = await Admin.find({});
+      const admins = await Employee.find({ role: 'admin' });
       
       for (const admin of admins) {
         const adminNotification = new Notification({
@@ -487,11 +501,239 @@ router.get('/employee', async (req, res) => {
   }
 });
 
+// Lấy booking theo table ID
+router.get('/by-table/:tableId', async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ 
+      table: req.params.tableId, 
+      status: { $in: ['confirmed', 'pending'] } 
+    })
+    .populate('customer', 'fullName phone email')
+    .populate('table', 'name')
+    .populate({
+      path: 'menuItems.item',
+      model: 'Menu',
+      select: 'name price'
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking cho bàn này' });
+    }
+
+    res.json(booking);
+  } catch (error) {
+    console.error('Lỗi lấy booking theo table:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Hoàn thành booking và giải phóng bàn
+router.post('/:bookingId/complete', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    // Tìm booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    if (booking.status !== 'confirmed') {
+      return res.status(400).json({ message: 'Booking chưa được xác nhận' });
+    }
+
+    // Cập nhật trạng thái booking thành completed
+    booking.status = 'completed';
+    booking.completedAt = new Date();
+    await booking.save();
+
+    // Giải phóng bàn
+    const table = await Table.findById(booking.table);
+    if (table) {
+      table.status = 'empty';
+      await table.save();
+      console.log('✅ Đã giải phóng bàn:', table.name);
+    }
+
+    res.json({
+      success: true,
+      message: 'Hoàn thành booking và giải phóng bàn thành công',
+      booking: {
+        id: booking._id,
+        status: booking.status
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi hoàn thành booking:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Xác nhận thanh toán cọc
+router.post('/:bookingId/confirm-deposit', async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    // Tìm booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    // Cập nhật trạng thái booking thành confirmed (đã cọc)
+    booking.status = 'confirmed';
+    booking.confirmedBy = req.user?.id || 'system';
+    booking.confirmedAt = new Date();
+    await booking.save();
+
+    // Cập nhật trạng thái bàn thành occupied
+    const table = await Table.findById(booking.table);
+    if (table) {
+      table.status = 'occupied';
+      await table.save();
+    }
+
+    // Tạo lịch sử giao dịch
+    try {
+      const transaction = new TransactionHistory({
+        bookingId: booking._id,
+        tableId: booking.table,
+        tableName: table?.name || `Bàn ${booking.table}`,
+        customerId: booking.customer,
+        customerInfo: booking.customerInfo,
+        transactionType: 'deposit',
+        amount: booking.depositAmount || 0,
+        paymentMethod: 'qr_code',
+        status: 'completed',
+        bankInfo: {
+          accountNumber: '2246811357',
+          accountName: 'DANG GIA HY',
+          bankName: 'Techcombank',
+          bankCode: '970407'
+        },
+        transactionId: 'TXN_' + Date.now(),
+        paidAt: new Date(),
+        confirmedAt: new Date(),
+        notes: `Thanh toán cọc bàn ${table?.name || booking.table}`
+      });
+
+      await transaction.save();
+      console.log('✅ Đã tạo lịch sử giao dịch cọc:', transaction._id);
+    } catch (transactionError) {
+      console.error('Lỗi tạo lịch sử giao dịch:', transactionError);
+    }
+
+    // Tạo thông báo cho khách hàng
+    try {
+      if (booking.customer) {
+        const customerNotification = new Notification({
+          user: booking.customer,
+          type: 'booking_confirmed',
+          title: '🎉 Đặt bàn đã được xác nhận!',
+          message: `Bàn ${table?.name || 'N/A'} đã được cọc ${booking.depositAmount?.toLocaleString() || '0'}đ. Bạn có thể đến quán vào ${booking.bookingDate} lúc ${booking.bookingTime}.`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await customerNotification.save();
+        console.log('Đã gửi thông báo xác nhận cọc cho khách hàng');
+      }
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo xác nhận cọc:', notificationError);
+    }
+
+    // Gửi thông báo cho tất cả nhân viên về cọc thành công
+    try {
+      const employees = await Employee.find({});
+      
+      for (const employee of employees) {
+        const notification = new Notification({
+          user: employee._id,
+          type: 'deposit_confirmed',
+          title: '💰 Cọc thành công - Cần xác nhận bàn',
+          message: `Khách hàng ${booking.customerInfo?.fullName || 'N/A'} đã cọc ${booking.depositAmount?.toLocaleString() || '0'}đ cho bàn ${table?.name || 'N/A'} vào ${booking.bookingDate} lúc ${booking.bookingTime}. Vui lòng chuẩn bị bàn.`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await notification.save();
+      }
+      
+      console.log(`Đã gửi thông báo cọc thành công cho ${employees.length} nhân viên`);
+    } catch (employeeNotificationError) {
+      console.error('Lỗi gửi thông báo cho nhân viên:', employeeNotificationError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Xác nhận thanh toán cọc thành công',
+      booking: {
+        id: booking._id,
+        status: booking.status,
+        depositAmount: booking.depositAmount
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi xác nhận thanh toán cọc:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// API tìm kiếm khách hàng (cho admin)
+router.get('/search-customers', async (req, res) => {
+  try {
+    const { name, phone } = req.query;
+    
+    console.log('🔍 Search customers API called with:', { name, phone });
+    
+    let searchQuery = {};
+    
+    if (phone) {
+      // Tìm kiếm theo SĐT
+      searchQuery = {
+        phone: { $regex: phone, $options: 'i' },
+        isActive: true
+      };
+      console.log('📱 Searching by phone with query:', searchQuery);
+    } else if (name && name.trim().length >= 2) {
+      // Tìm kiếm theo tên
+      searchQuery = {
+        $or: [
+          { fullName: { $regex: name, $options: 'i' } },
+          { username: { $regex: name, $options: 'i' } }
+        ],
+        isActive: true
+      };
+      console.log('👤 Searching by name with query:', searchQuery);
+    } else {
+      return res.status(400).json({ message: 'Vui lòng nhập tên (ít nhất 2 ký tự) hoặc số điện thoại để tìm kiếm' });
+    }
+
+    const customers = await Customer.find(searchQuery)
+      .select('_id username fullName email phone')
+      .limit(10);
+
+    console.log('✅ Found customers:', customers.length);
+    customers.forEach((c, i) => {
+      console.log(`  ${i+1}. ${c.fullName} (@${c.username}) - ${c.phone}`);
+    });
+
+    res.json({
+      success: true,
+      customers: customers
+    });
+  } catch (error) {
+    console.error('❌ Error searching customers:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
+});
+
 // Admin đặt bàn nhanh (không cần token)
 router.post('/admin-quick-booking', async (req, res) => {
   try {
     console.log('Admin quick booking request:', req.body);
     const { 
+      customerId, // ID khách hàng đã chọn
       customerName,
       customerPhone,
       customerEmail,
@@ -499,11 +741,12 @@ router.post('/admin-quick-booking', async (req, res) => {
       numberOfGuests, 
       bookingDate, 
       bookingTime, 
-      specialRequests 
+      specialRequests,
+      depositAmount 
     } = req.body;
 
     // Kiểm tra thông tin bắt buộc
-    if (!tableId || !numberOfGuests || !bookingDate || !bookingTime || !customerName) {
+    if (!tableId || !numberOfGuests || !bookingDate || !bookingTime || !customerPhone) {
       return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin' });
     }
 
@@ -526,22 +769,26 @@ router.post('/admin-quick-booking', async (req, res) => {
     }
 
     // Tạo booking mới
+    const parsedDepositAmount = depositAmount ? parseInt(depositAmount) : 0;
+    console.log('Creating admin booking with depositAmount:', parsedDepositAmount, 'from input:', depositAmount);
+    
     const booking = new Booking({
-      customer: null, // Admin đặt bàn nhanh không cần customer ID
+      customer: customerId || null, // Sử dụng customerId nếu có
       table: tableId, // Sử dụng tableId làm table
       numberOfGuests,
       bookingDate: new Date(bookingDate),
       bookingTime,
       menuItems: [], // Admin đặt bàn nhanh không có menu items
       totalAmount: 0, // Admin đặt bàn nhanh không có tổng tiền
+      depositAmount: parsedDepositAmount, // Số tiền cọc
       status: 'confirmed', // Admin đặt bàn nhanh tự động confirm
       notes: specialRequests,
       confirmedBy: req.user?.id || 'admin', // Nếu có user thì dùng user id, không thì dùng 'admin'
       confirmedAt: new Date(),
       customerInfo: {
-        fullName: customerName,
+        fullName: 'Khách hàng',
         phone: customerPhone,
-        email: customerEmail
+        email: customerEmail || ''
       }
     });
 
@@ -551,21 +798,67 @@ router.post('/admin-quick-booking', async (req, res) => {
     table.status = 'occupied';
     await table.save();
 
-    // Tạo thông báo chung cho tất cả khách hàng về đặt bàn mới
+    // Tìm khách hàng trong hệ thống
+    let foundCustomer = null;
+    
+    // Nếu có customerId, tìm theo ID (ưu tiên cao nhất)
+    if (customerId) {
+      try {
+        foundCustomer = await Customer.findById(customerId);
+        if (foundCustomer) {
+          console.log('Tìm thấy khách hàng theo ID:', foundCustomer.fullName);
+        }
+      } catch (customerError) {
+        console.error('Lỗi tìm khách hàng theo ID:', customerError);
+      }
+    }
+    
+    // Nếu không tìm thấy theo ID, tìm theo SĐT
+    if (!foundCustomer && customerPhone) {
+      try {
+        foundCustomer = await Customer.findOne({
+          phone: { $regex: customerPhone, $options: 'i' }
+        });
+        
+        if (foundCustomer) {
+          console.log('Tìm thấy khách hàng theo SĐT:', foundCustomer.fullName);
+        }
+      } catch (customerError) {
+        console.error('Lỗi tìm khách hàng theo SĐT:', customerError);
+      }
+    }
+
+    // Tạo thông báo cho khách hàng cụ thể hoặc thông báo chung
     try {
-      const generalNotification = new Notification({
-        user: null, // null = thông báo chung cho tất cả khách hàng
-        type: 'booking_pending',
-        title: 'Đặt bàn thành công!',
-        message: `Bàn ${table.name} đã được đặt cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. Tổng tiền: ${totalAmount.toLocaleString()}đ. Đang chờ nhân viên xác nhận.`,
-        bookingId: booking._id,
-        isRead: false
-      });
-      
-      await generalNotification.save();
-      console.log('Đã gửi thông báo chung cho khách hàng về đặt bàn thành công');
+      if (foundCustomer) {
+        // Tạo thông báo riêng cho khách hàng đã tìm thấy
+        const customerNotification = new Notification({
+          user: foundCustomer._id,
+          type: 'booking_confirmed',
+          title: '🎉 Admin đã đặt bàn cho bạn!',
+          message: `Chào ${foundCustomer.fullName}! Admin đã đặt bàn ${table.name} cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await customerNotification.save();
+        console.log(`Đã gửi thông báo riêng cho khách hàng ${foundCustomer.fullName}`);
+      } else {
+        // Tạo thông báo chung cho tất cả khách hàng
+        const generalNotification = new Notification({
+          user: null, // null = thông báo chung cho tất cả khách hàng
+          type: 'booking_pending',
+          title: 'Đặt bàn thành công!',
+          message: `Bàn ${table.name} đã được đặt cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await generalNotification.save();
+        console.log('Đã gửi thông báo chung cho khách hàng về đặt bàn thành công');
+      }
     } catch (notificationError) {
-      console.error('Lỗi gửi thông báo chung cho khách hàng:', notificationError);
+      console.error('Lỗi gửi thông báo cho khách hàng:', notificationError);
     }
 
     res.status(201).json({ 

@@ -91,11 +91,14 @@ export default function NotificationCard({ notification, onPress, onDelete }: No
           <Text style={styles.message}>{notification.message}</Text>
           {notification.bookingId && (
             <View style={styles.bookingInfo}>
-              <Text style={styles.bookingText}>
-                Bàn: {notification.bookingId.table} | {new Date(notification.bookingId.bookingDate).toLocaleDateString('vi-VN')} {notification.bookingId.bookingTime}
+              <Text style={styles.bookingText} numberOfLines={2}>
+                🏷️ Bàn: {notification.bookingId.table}
+              </Text>
+              <Text style={styles.bookingText} numberOfLines={1}>
+                📅 {new Date(notification.bookingId.bookingDate).toLocaleDateString('vi-VN')} lúc {notification.bookingId.bookingTime}
               </Text>
               <Text style={styles.bookingAmount}>
-                {notification.bookingId.totalAmount.toLocaleString('vi-VN')}đ
+                💰 {notification.bookingId.totalAmount.toLocaleString('vi-VN')}đ
               </Text>
             </View>
           )}
@@ -115,12 +118,13 @@ export default function NotificationCard({ notification, onPress, onDelete }: No
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     marginVertical: 4,
-    padding: 16,
+    padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    maxWidth: '100%',
   },
   unreadContainer: {
     borderLeftWidth: 4,
@@ -130,39 +134,44 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   content: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   message: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
-    lineHeight: 20,
+    lineHeight: 18,
+    flexWrap: 'wrap',
   },
   bookingInfo: {
-    marginTop: 8,
-    padding: 8,
+    marginTop: 6,
+    padding: 6,
     backgroundColor: '#f9fafb',
     borderRadius: 6,
   },
   bookingText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
+    flexWrap: 'wrap',
+    marginBottom: 2,
   },
   bookingAmount: {
     fontSize: 14,

@@ -77,31 +77,37 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <ThemedView style={styles.content}>
-          <Stack.Screen options={{ title: 'Đăng nhập' }} />
-          
-          <View style={styles.header}>
-            <Ionicons 
-              name="restaurant" 
-              size={60} 
-              color={accountType === 'customer' ? '#16a34a' : '#dc2626'} 
-            />
-            <ThemedText type="title" style={styles.welcomeText}>
+    <ThemedView style={styles.container}>
+      <Stack.Screen options={{ title: 'Đăng nhập' }} />
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header Section */}
+          <View style={styles.headerSection}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Ionicons 
+                  name="cafe" 
+                  size={40} 
+                  color="#8B4513" 
+                />
+              </View>
+            </View>
+            <ThemedText type="title" style={styles.welcomeTitle}>
               Chào mừng trở lại
             </ThemedText>
-            <ThemedText style={styles.subtitle}>
-              Đăng nhập để tiếp tục
+            <ThemedText style={styles.welcomeSubtitle}>
+              Đăng nhập để tiếp tục sử dụng dịch vụ
             </ThemedText>
           </View>
 
           {/* Account Type Selector */}
-          <View style={styles.accountTypeContainer}>
-            <ThemedText style={styles.accountTypeLabel}>Loại tài khoản</ThemedText>
+          <View style={styles.accountTypeSection}>
             <View style={styles.accountTypeButtons}>
               <TouchableOpacity
                 style={[
@@ -146,38 +152,42 @@ export default function LoginScreen() {
           </View>
 
           {/* Login Form */}
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons 
-                name="person" 
-                size={20} 
-                color={accountType === 'customer' ? '#16a34a' : '#dc2626'} 
-                style={styles.inputIcon} 
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Tên đăng nhập"
-                value={form.username}
-                onChangeText={(text) => setForm({ ...form, username: text })}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+          <View style={styles.formSection}>
+            <View style={styles.inputGroup}>
+              <View style={styles.inputContainer}>
+                <Ionicons 
+                  name="person-outline" 
+                  size={20} 
+                  color="#6b7280" 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Tên đăng nhập"
+                  placeholderTextColor="#9ca3af"
+                  value={form.username}
+                  onChangeText={(text) => setForm({ ...form, username: text })}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-            <View style={styles.inputContainer}>
-              <Ionicons 
-                name="lock-closed" 
-                size={20} 
-                color={accountType === 'customer' ? '#16a34a' : '#dc2626'} 
-                style={styles.inputIcon} 
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Mật khẩu"
-                value={form.password}
-                onChangeText={(text) => setForm({ ...form, password: text })}
-                secureTextEntry
-              />
+              <View style={styles.inputContainer}>
+                <Ionicons 
+                  name="lock-closed-outline" 
+                  size={20} 
+                  color="#6b7280" 
+                  style={styles.inputIcon} 
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Mật khẩu"
+                  placeholderTextColor="#9ca3af"
+                  value={form.password}
+                  onChangeText={(text) => setForm({ ...form, password: text })}
+                  secureTextEntry
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -192,131 +202,217 @@ export default function LoginScreen() {
               <ThemedText style={styles.loginButtonText}>
                 {isSubmitting ? 'Đang đăng nhập...' : 'Đăng nhập'}
               </ThemedText>
+              <Ionicons 
+                name="arrow-forward" 
+                size={20} 
+                color="#fff" 
+              />
             </TouchableOpacity>
           </View>
 
-          {/* Footer - Show different options based on account type */}
+          {/* Footer */}
           {accountType === 'customer' && (
-            <View style={styles.footer}>
-              <TouchableOpacity onPress={handleRegister}>
-                <ThemedText style={styles.registerText}>
-                  Đăng ký
+            <View style={styles.footerSection}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <ThemedText style={styles.dividerText}>hoặc</ThemedText>
+                <View style={styles.dividerLine} />
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.registerButton}
+                onPress={handleRegister}
+              >
+                <Ionicons name="person-add" size={20} color="#16a34a" />
+                <ThemedText style={styles.registerButtonText}>
+                  Tạo tài khoản mới
                 </ThemedText>
               </TouchableOpacity>
             </View>
           )}
-        </ThemedView>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8fafc',
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  content: {
-    flex: 1,
     padding: 24,
-    justifyContent: 'center',
   },
-  header: {
+  // Header Section
+  headerSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
+    marginTop: 20,
   },
-  welcomeText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-  },
-  accountTypeContainer: {
+  logoContainer: {
     marginBottom: 24,
   },
-  accountTypeLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  // Account Type Section
+  accountTypeSection: {
+    marginBottom: 32,
   },
   accountTypeButtons: {
     flexDirection: 'row',
-    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   accountTypeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
     gap: 8,
   },
   accountTypeButtonActive: {
     backgroundColor: '#16a34a',
-    borderColor: '#16a34a',
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   accountTypeText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#16a34a',
   },
   accountTypeTextActive: {
     color: '#fff',
   },
-  form: {
+  // Form Section
+  formSection: {
+    marginBottom: 32,
+  },
+  inputGroup: {
+    gap: 16,
     marginBottom: 24,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    marginBottom: 16,
     paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 18,
     fontSize: 16,
+    color: '#1f2937',
   },
   loginButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    gap: 12,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   loginButtonDisabled: {
     opacity: 0.6,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  footer: {
+  // Footer Section
+  footerSection: {
     alignItems: 'center',
   },
-  registerText: {
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    marginHorizontal: 16,
     fontSize: 14,
-    color: '#3b82f6',
-    textDecorationLine: 'underline',
+    color: '#9ca3af',
+  },
+  registerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#16a34a',
+    backgroundColor: '#fff',
+    gap: 12,
+    width: '100%',
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#16a34a',
   },
 });
+

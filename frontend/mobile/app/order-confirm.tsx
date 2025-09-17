@@ -1,4 +1,4 @@
-import { StyleSheet, TouchableOpacity, View, Alert, ScrollView } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Alert, ScrollView, Image, Modal } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -6,18 +6,73 @@ import { useOrder } from '@/components/order-context';
 import { useTables } from '@/components/tables-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useState, useEffect } from 'react';
+import { tryApiCall } from '@/constants/api';
 
 export default function OrderConfirmScreen() {
   const router = useRouter();
   const { state, totalAmount, clearOrder } = useOrder();
   const { markPending, isPending } = useTables();
+  
+  // State cho QR payment
+  const [showQRPayment, setShowQRPayment] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [bookingData, setBookingData] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const sendToKitchen = async () => {
+  // Tạo QR code thanh toán
+  const generateQRCode = async (depositAmount) => {
     try {
-      if (state.tableId) {
-        markPending(state.tableId);
-      }
+      setQrLoading(true);
+      console.log('🔄 Đang tạo QR code với số tiền:', depositAmount);
+      
+      // Tạo QR code URL trực tiếp (fallback)
+      const qrCodeUrl = `https://img.vietqr.io/image/970407-2246811357-compact2.png?amount=${depositAmount}&addInfo=${encodeURIComponent(`Coc ban ${state.selectedTable?.name || 'N/A'}`)}`;
+      
+      console.log('🔗 QR Code URL:', qrCodeUrl);
+      
+      // Thử gọi API trước
+      try {
+        const result = await tryApiCall('/api/payment/generate-qr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            accountNumber: '2246811357',
+            accountName: 'DANG GIA HY',
+            bankCode: '970407',
+            amount: depositAmount,
+            description: `Coc ban ${state.selectedTable?.name || 'N/A'}`
+          })
+        });
 
+        if (result.success) {
+          setQrCode(result.data.qrCode);
+          console.log('✅ QR code đã được tạo từ API');
+        } else {
+          console.warn('⚠️ API failed, sử dụng fallback URL');
+          setQrCode(qrCodeUrl);
+        }
+      } catch (apiError) {
+        console.warn('⚠️ API error, sử dụng fallback URL:', apiError);
+        setQrCode(qrCodeUrl);
+      }
+      
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      Alert.alert('Lỗi', 'Lỗi kết nối khi tạo QR code');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  // Xử lý cọc ngay
+  const handleDepositPayment = async () => {
+    try {
+      setIsSubmitting(true);
+      
       // Lấy token và thông tin user
       const token = await AsyncStorage.getItem('userToken');
       const userInfo = await AsyncStorage.getItem('userInfo');
@@ -29,89 +84,150 @@ export default function OrderConfirmScreen() {
 
       const user = JSON.parse(userInfo);
       
+      // Kiểm tra ngày giờ đã được chọn chưa
+      if (!state.bookingInfo?.date || !state.bookingInfo?.time) {
+        Alert.alert('Lỗi', 'Vui lòng chọn ngày và giờ đặt bàn');
+        return;
+      }
+
       // Tạo booking thực sự
       const bookingData = {
         tableId: state.selectedTable?.id,
         numberOfGuests: state.numberOfGuests,
-        bookingDate: new Date().toISOString().split('T')[0], // Ngày hôm nay
-        bookingTime: new Date().toTimeString().split(' ')[0].substring(0, 5), // Giờ hiện tại
+        bookingDate: state.bookingInfo.date,
+        bookingTime: state.bookingInfo.time,
         menuItems: state.items.map(item => ({
           itemId: item.id,
           quantity: item.quantity
         })),
-        notes: 'Đặt bàn trực tiếp tại quán'
+        notes: 'Đặt bàn trực tiếp tại quán',
+        depositAmount: state.depositAmount || 50000 // Sử dụng cọc từ context, mặc định 50k
       };
 
-      // Gọi API tạo booking với retry logic
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.5.74:5000';
-      let response;
-      let success = false;
-      
-      try {
-        console.log('Trying to create booking with data:', bookingData);
-        response = await fetch(`${API_URL}/api/bookings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(bookingData)
-        });
-        console.log('Response status:', response.status);
-        
-        if (response.ok) {
-          success = true;
-        }
-      } catch (fetchError) {
-        console.error('Fetch error:', fetchError);
-        // Retry with different URL
-        try {
-          response = await fetch(`http://192.168.5.74:5000/api/bookings`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(bookingData)
-          });
-          console.log('Retry response status:', response.status);
-          
-          if (response.ok) {
-            success = true;
-          }
-        } catch (retryError) {
-          console.error('Retry also failed:', retryError);
-          throw retryError;
-        }
-      }
+      // Tạo booking với cọc
+      const result = await tryApiCall('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(bookingData)
+      });
 
-      if (success && response) {
-        const result = await response.json();
-        console.log('Booking created successfully:', result);
+      if (result.success) {
+        console.log('✅ Booking created successfully');
         
-        // Hiển thị thông báo thành công
+        // Chuyển đến màn hình thanh toán QR
+        router.push({
+          pathname: '/payment',
+          params: {
+            bookingId: result.data?.booking?.id || result.data?.bookingId || result.data?._id,
+            tableId: state.selectedTable?.id,
+            depositAmount: bookingData.depositAmount,
+            tableName: state.selectedTable?.name
+          }
+        });
+        
+      } else {
+        console.error('❌ Booking failed:', result.error);
+        Alert.alert('Lỗi', result.error || 'Không thể tạo đơn hàng');
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Kiểm tra thanh toán tự động
+  const checkPaymentAutomatically = async () => {
+    if (!bookingData) return;
+    
+    try {
+      console.log('🔍 Đang kiểm tra thanh toán tự động...');
+      
+      const result = await tryApiCall('/api/payment/check-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId: bookingData.bookingId,
+          amount: bookingData.depositAmount,
+          transactionType: 'deposit'
+        })
+      });
+
+      if (result.success && result.data?.status === 'completed') {
+        console.log('✅ Đã phát hiện thanh toán!');
+        await confirmDepositPayment();
+      } else {
+        Alert.alert('Thông báo', 'Chưa phát hiện thanh toán. Vui lòng thử lại sau 30 giây.');
+      }
+    } catch (error) {
+      console.error('Error checking payment:', error);
+      Alert.alert('Lỗi', 'Lỗi kiểm tra thanh toán');
+    }
+  };
+
+  // Xác nhận thanh toán cọc
+  const confirmDepositPayment = async () => {
+    if (!bookingData) return;
+    
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const result = await tryApiCall(`/api/bookings/${bookingData.bookingId}/confirm-deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (result.success) {
+        // Đóng QR modal
+        setShowQRPayment(false);
+        setQrCode('');
+        setBookingData(null);
+        
+        // Hiển thị thông báo thành công và chuyển đến trang xác nhận lần 2
         Alert.alert(
-          '✅ Đặt bàn thành công!',
-          `Bạn đã đặt bàn ${state.selectedTable?.name} thành công!\n\n📋 Tổng cộng: ${totalAmount.toLocaleString('vi-VN')}đ\n🍽️ Số món: ${state.items.length} món\n👥 Số khách: ${state.numberOfGuests} người\n\nThông báo đã được gửi đến nhân viên. Họ sẽ xác nhận và chuẩn bị bàn cho bạn.`,
+          '🎉 CỌC THÀNH CÔNG!',
+          `Đã cọc ${parseInt(bookingData.depositAmount).toLocaleString()}đ cho bàn ${bookingData.tableName}.\n\n✅ Thông báo đã được gửi đến nhân viên.`,
           [
             {
-              text: 'Về trang chủ',
+              text: 'Xác nhận lần 2',
               onPress: () => {
-                clearOrder();
-                router.replace('/');
+                // Chuyển đến trang xác nhận lần 2
+                router.push({
+                  pathname: '/booking-confirm',
+                  params: {
+                    bookingId: bookingData.bookingId,
+                    tableId: bookingData.tableId,
+                    depositAmount: bookingData.depositAmount,
+                    tableName: bookingData.tableName,
+                    isSecondConfirm: 'true'
+                  }
+                });
               }
             }
           ]
         );
       } else {
-        console.error('Booking failed:', response?.status, response?.statusText);
-        const errorData = response ? await response.json().catch(() => ({})) : {};
-        Alert.alert('Lỗi', errorData.message || 'Không thể đặt bàn. Vui lòng thử lại.');
+        Alert.alert('Lỗi', result.error || 'Xác nhận cọc thất bại');
       }
     } catch (error) {
-      console.error('Error creating booking:', error);
-      Alert.alert('Lỗi', 'Có lỗi xảy ra. Vui lòng thử lại.');
+      console.error('Error confirming deposit:', error);
+      Alert.alert('Lỗi', 'Lỗi kết nối khi xác nhận cọc');
     }
+  };
+
+  // Hủy thanh toán
+  const cancelPayment = () => {
+    setShowQRPayment(false);
+    setQrCode('');
+    setBookingData(null);
   };
 
   const goPayment = () => {
@@ -195,9 +311,21 @@ export default function OrderConfirmScreen() {
         {/* Total Amount */}
         <View style={styles.totalCard}>
           <View style={styles.totalRow}>
-            <ThemedText style={styles.totalLabel}>Tổng cộng:</ThemedText>
+            <ThemedText style={styles.totalLabel}>Tổng tiền món:</ThemedText>
             <ThemedText style={styles.totalAmount}>
               {totalAmount.toLocaleString('vi-VN')}đ
+            </ThemedText>
+          </View>
+          <View style={styles.totalRow}>
+            <ThemedText style={styles.totalLabel}>💰 Tiền cọc:</ThemedText>
+            <ThemedText style={styles.depositAmount}>
+              {(state.depositAmount || 50000).toLocaleString('vi-VN')}đ
+            </ThemedText>
+          </View>
+          <View style={[styles.totalRow, styles.finalTotal]}>
+            <ThemedText style={styles.finalTotalLabel}>Còn lại phải trả:</ThemedText>
+            <ThemedText style={styles.finalTotalAmount}>
+              {(totalAmount - (state.depositAmount || 50000)).toLocaleString('vi-VN')}đ
             </ThemedText>
           </View>
         </View>
@@ -205,11 +333,112 @@ export default function OrderConfirmScreen() {
 
       {/* Action Buttons */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.sendButton} onPress={sendToKitchen}>
-          <Ionicons name="send" size={20} color="#fff" />
-          <ThemedText style={styles.sendButtonText}>Gửi thông báo</ThemedText>
+        <TouchableOpacity style={styles.sendButton} onPress={handleDepositPayment} disabled={isSubmitting}>
+          <Ionicons name="card" size={20} color="#fff" />
+          <ThemedText style={styles.sendButtonText}>CỌC NGAY</ThemedText>
         </TouchableOpacity>
       </View>
+
+      {/* QR Payment Modal */}
+      {showQRPayment && (
+        <Modal
+          visible={showQRPayment}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={cancelPayment}
+        >
+          <View style={styles.qrPaymentOverlay}>
+            <View style={styles.qrPaymentModal}>
+              <View style={styles.qrPaymentHeader}>
+                <ThemedText type="title" style={styles.qrPaymentTitle}>
+                  💳 THANH TOÁN CỌC
+                </ThemedText>
+                <TouchableOpacity onPress={cancelPayment} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.qrPaymentContent}>
+                <ThemedText style={styles.qrPaymentSubtitle}>
+                  Quét mã QR để thanh toán cọc {parseInt(bookingData?.depositAmount || 0).toLocaleString()}đ
+                </ThemedText>
+
+                {qrLoading ? (
+                  <View style={styles.qrLoadingContainer}>
+                    <View style={styles.qrSpinner} />
+                    <ThemedText style={styles.qrLoadingText}>Đang tạo QR code...</ThemedText>
+                  </View>
+                ) : qrCode ? (
+                  <View style={styles.qrCodeContainer}>
+                    <Image 
+                      source={{ uri: qrCode }} 
+                      style={styles.qrCodeImage}
+                      resizeMode="contain"
+                      onError={(error) => {
+                        console.error('QR Code load error:', error);
+                        Alert.alert('Lỗi', 'Không thể tải QR code');
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.qrErrorContainer}>
+                    <ThemedText style={styles.qrErrorText}>Không thể tạo QR code</ThemedText>
+                  </View>
+                )}
+
+                <View style={styles.paymentInfo}>
+                  <ThemedText style={styles.paymentInfoTitle}>Thông tin chuyển khoản:</ThemedText>
+                  <View style={styles.paymentInfoRow}>
+                    <ThemedText style={styles.paymentInfoLabel}>Tài khoản:</ThemedText>
+                    <ThemedText style={styles.paymentInfoValue}>DANG GIA HY</ThemedText>
+                  </View>
+                  <View style={styles.paymentInfoRow}>
+                    <ThemedText style={styles.paymentInfoLabel}>Số TK:</ThemedText>
+                    <ThemedText style={styles.paymentInfoValue}>2246811357</ThemedText>
+                  </View>
+                  <View style={styles.paymentInfoRow}>
+                    <ThemedText style={styles.paymentInfoLabel}>Ngân hàng:</ThemedText>
+                    <ThemedText style={styles.paymentInfoValue}>Techcombank</ThemedText>
+                  </View>
+                  <View style={styles.paymentInfoRow}>
+                    <ThemedText style={styles.paymentInfoLabel}>Số tiền:</ThemedText>
+                    <ThemedText style={styles.paymentInfoValue}>{parseInt(bookingData?.depositAmount || 0).toLocaleString()}đ</ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.qrPaymentButtons}>
+                  <TouchableOpacity 
+                    onPress={checkPaymentAutomatically}
+                    style={styles.checkPaymentButton}
+                  >
+                    <ThemedText style={styles.checkPaymentButtonText}>
+                      🔍 Kiểm tra thanh toán tự động
+                    </ThemedText>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    onPress={confirmDepositPayment}
+                    style={styles.confirmPaymentButton}
+                  >
+                    <ThemedText style={styles.confirmPaymentButtonText}>
+                      ✅ Đã chuyển khoản - Xác nhận
+                    </ThemedText>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    onPress={cancelPayment}
+                    style={styles.cancelPaymentButton}
+                  >
+                    <ThemedText style={styles.cancelPaymentButtonText}>
+                      ❌ Hủy thanh toán
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ThemedView>
   );
 }
@@ -420,5 +649,171 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
+  },
+  depositAmount: {
+    fontSize: 18,
+    color: '#16a34a',
+    fontWeight: 'bold',
+  },
+  finalTotal: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  finalTotalLabel: {
+    fontSize: 16,
+    color: '#111827',
+    fontWeight: '600',
+  },
+  finalTotalAmount: {
+    fontSize: 20,
+    color: '#ef4444',
+    fontWeight: 'bold',
+  },
+  // QR Payment Modal Styles
+  qrPaymentOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrPaymentModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    margin: 20,
+    maxHeight: '90%',
+    width: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  qrPaymentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  qrPaymentTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#f59e0b',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  qrPaymentContent: {
+    padding: 20,
+  },
+  qrPaymentSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  qrLoadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  qrSpinner: {
+    width: 50,
+    height: 50,
+    borderWidth: 4,
+    borderColor: '#f3f4f6',
+    borderTopColor: '#f59e0b',
+    borderRadius: 25,
+    marginBottom: 15,
+  },
+  qrLoadingText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  qrCodeImage: {
+    width: 250,
+    height: 250,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+  },
+  qrErrorContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  qrErrorText: {
+    fontSize: 16,
+    color: '#ef4444',
+  },
+  paymentInfo: {
+    backgroundColor: '#f9fafb',
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  paymentInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 10,
+  },
+  paymentInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  paymentInfoLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  paymentInfoValue: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  qrPaymentButtons: {
+    gap: 12,
+  },
+  checkPaymentButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  checkPaymentButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  confirmPaymentButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  confirmPaymentButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelPaymentButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelPaymentButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

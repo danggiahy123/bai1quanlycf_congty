@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 import { DEFAULT_API_URL } from '@/constants/api';
 
@@ -84,123 +85,179 @@ export default function RegisterScreen() {
   return (
     <ThemedView style={styles.container}>
       <Stack.Screen options={{ title: 'Đăng ký' }} />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <KeyboardAvoidingView
-          behavior={Platform.select({ ios: 'padding', android: undefined })}
-          style={{ width: '100%' }}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.header}>
-            <ThemedText type="title">Tạo tài khoản</ThemedText>
-            <ThemedText>Đăng ký để sử dụng dịch vụ</ThemedText>
+          {/* Header Section */}
+          <View style={styles.headerSection}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Ionicons name="person-add" size={40} color="#16a34a" />
+              </View>
+            </View>
+            <ThemedText type="title" style={styles.welcomeTitle}>
+              Tạo tài khoản
+            </ThemedText>
+            <ThemedText style={styles.welcomeSubtitle}>
+              Đăng ký để sử dụng dịch vụ quán cà phê
+            </ThemedText>
           </View>
 
-          <View style={styles.form}>
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Tên đăng nhập *</ThemedText>
-              <TextInput
-                value={form.username}
-                onChangeText={(value) => handleInputChange('username', value)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Nhập tên đăng nhập"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+          {/* Form Section */}
+          <View style={styles.formSection}>
+            {/* Username */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Tên đăng nhập *</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.username}
+                  onChangeText={(value) => handleInputChange('username', value)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Nhập tên đăng nhập"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Mật khẩu *</ThemedText>
-              <TextInput
-                value={form.password}
-                onChangeText={(value) => handleInputChange('password', value)}
-                secureTextEntry
-                placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+            {/* Password */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Mật khẩu *</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.password}
+                  onChangeText={(value) => handleInputChange('password', value)}
+                  secureTextEntry
+                  placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Xác nhận mật khẩu *</ThemedText>
-              <TextInput
-                value={form.confirmPassword}
-                onChangeText={(value) => handleInputChange('confirmPassword', value)}
-                secureTextEntry
-                placeholder="Nhập lại mật khẩu"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+            {/* Confirm Password */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Xác nhận mật khẩu *</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.confirmPassword}
+                  onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                  secureTextEntry
+                  placeholder="Nhập lại mật khẩu"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Họ và tên *</ThemedText>
-              <TextInput
-                value={form.fullName}
-                onChangeText={(value) => handleInputChange('fullName', value)}
-                placeholder="Nhập họ và tên"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Họ và tên *</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.fullName}
+                  onChangeText={(value) => handleInputChange('fullName', value)}
+                  placeholder="Nhập họ và tên"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Email *</ThemedText>
-              <TextInput
-                value={form.email}
-                onChangeText={(value) => handleInputChange('email', value)}
-                inputMode="email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Nhập email"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+            {/* Email */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Email *</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="mail-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.email}
+                  onChangeText={(value) => handleInputChange('email', value)}
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Nhập email"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Số điện thoại</ThemedText>
-              <TextInput
-                value={form.phone}
-                onChangeText={(value) => handleInputChange('phone', value)}
-                inputMode="tel"
-                placeholder="Nhập số điện thoại"
-                placeholderTextColor="#999"
-                style={styles.input}
-              />
+            {/* Phone */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Số điện thoại</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="call-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.phone}
+                  onChangeText={(value) => handleInputChange('phone', value)}
+                  inputMode="tel"
+                  placeholder="Nhập số điện thoại"
+                  placeholderTextColor="#9ca3af"
+                  style={styles.input}
+                />
+              </View>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <ThemedText type="defaultSemiBold">Địa chỉ</ThemedText>
-              <TextInput
-                value={form.address}
-                onChangeText={(value) => handleInputChange('address', value)}
-                placeholder="Nhập địa chỉ"
-                placeholderTextColor="#999"
-                style={styles.input}
-                multiline
-                numberOfLines={2}
-              />
+            {/* Address */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Địa chỉ</ThemedText>
+              <View style={styles.inputContainer}>
+                <Ionicons name="location-outline" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  value={form.address}
+                  onChangeText={(value) => handleInputChange('address', value)}
+                  placeholder="Nhập địa chỉ"
+                  placeholderTextColor="#9ca3af"
+                  style={[styles.input, styles.textArea]}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
             </View>
 
+            {/* Submit Button */}
             <TouchableOpacity 
               onPress={handleSubmit} 
-              style={[styles.button, isSubmitting && { opacity: 0.7 }]} 
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
               disabled={isSubmitting}
             >
-              <ThemedText type="defaultSemiBold" style={styles.buttonText}>
-                {isSubmitting ? 'Đang đăng ký...' : 'Đăng ký'}
+              <ThemedText style={styles.submitButtonText}>
+                {isSubmitting ? 'Đang đăng ký...' : 'Tạo tài khoản'}
               </ThemedText>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
             </TouchableOpacity>
 
-            <View style={styles.footerRow}>
-              <ThemedText>Đã có tài khoản?</ThemedText>
-              <TouchableOpacity onPress={() => router.replace('/')}>
-                <ThemedText type="link"> Đăng nhập</ThemedText>
+            {/* Footer */}
+            <View style={styles.footerSection}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <ThemedText style={styles.dividerText}>hoặc</ThemedText>
+                <View style={styles.dividerLine} />
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.loginButton}
+                onPress={() => router.replace('/')}
+              >
+                <Ionicons name="log-in" size={20} color="#16a34a" />
+                <ThemedText style={styles.loginButtonText}>
+                  Đăng nhập
+                </ThemedText>
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
@@ -208,43 +265,150 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#f8fafc',
   },
-  header: {
-    gap: 4,
-    marginBottom: 20,
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+  },
+  // Header Section
+  headerSection: {
     alignItems: 'center',
+    marginBottom: 32,
+    marginTop: 20,
   },
-  form: {
-    gap: 16,
+  logoContainer: {
+    marginBottom: 24,
   },
-  fieldGroup: {
-    gap: 6,
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#aaa',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  welcomeSubtitle: {
     fontSize: 16,
-    backgroundColor: '#fff',
+    color: '#6b7280',
+    textAlign: 'center',
   },
-  button: {
-    marginTop: 8,
-    backgroundColor: '#2563eb',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
+  // Form Section
+  formSection: {
+    marginBottom: 32,
   },
-  buttonText: {
-    color: '#fff',
+  inputGroup: {
+    marginBottom: 20,
   },
-  footerRow: {
-    marginTop: 12,
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 18,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  textArea: {
+    paddingTop: 18,
+    paddingBottom: 18,
+    minHeight: 60,
+  },
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#16a34a',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    gap: 12,
+    marginTop: 8,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  // Footer Section
+  footerSection: {
+    alignItems: 'center',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    width: '100%',
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#16a34a',
+    backgroundColor: '#fff',
+    gap: 12,
+    width: '100%',
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#16a34a',
   },
 });

@@ -22,6 +22,7 @@ type OrderState = {
   selectedTable?: SelectedTable;
   items: OrderItem[];
   bookingInfo?: BookingInfo;
+  depositAmount?: number;
 };
 
 type OrderContextValue = {
@@ -29,6 +30,7 @@ type OrderContextValue = {
   setGuests: (num: number) => void;
   setTable: (table: SelectedTable) => void;
   setBookingInfo: (info: BookingInfo) => void;
+  setDepositAmount: (amount: number) => void;
   addItem: (item: Omit<OrderItem, 'quantity'>) => void;
   updateItemQuantity: (itemId: string, quantity: number) => void;
   removeItem: (itemId: string) => void;
@@ -44,6 +46,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
   const setGuests = useCallback((num: number) => setState((s) => ({ ...s, numberOfGuests: Math.max(0, Math.floor(num)) })), []);
   const setTable = useCallback((table: SelectedTable) => setState((s) => ({ ...s, selectedTable: table })), []);
   const setBookingInfo = useCallback((info: BookingInfo) => setState((s) => ({ ...s, bookingInfo: info })), []);
+  const setDepositAmount = useCallback((amount: number) => setState((s) => ({ ...s, depositAmount: amount })), []);
   const addItem = useCallback((item: Omit<OrderItem, 'quantity'>) =>
     setState((s) => {
       const exist = s.items.find((x) => x.id === item.id);
@@ -60,13 +63,13 @@ export function OrderProvider({ children }: { children: ReactNode }) {
         .filter((x) => x.quantity > 0),
     })), []);
   const removeItem = useCallback((itemId: string) => setState((s) => ({ ...s, items: s.items.filter((x) => x.id !== itemId) })), []);
-  const clearOrder = useCallback(() => setState({ numberOfGuests: 0, items: [], selectedTable: undefined, bookingInfo: undefined }), []);
+  const clearOrder = useCallback(() => setState({ numberOfGuests: 0, items: [], selectedTable: undefined, bookingInfo: undefined, depositAmount: undefined }), []);
 
   const totalAmount = useMemo(() => state.items.reduce((sum, x) => sum + x.price * x.quantity, 0), [state.items]);
 
   const value: OrderContextValue = useMemo(
-    () => ({ state, setGuests, setTable, setBookingInfo, addItem, updateItemQuantity, removeItem, clearOrder, totalAmount }),
-    [state, setGuests, setTable, setBookingInfo, addItem, updateItemQuantity, removeItem, clearOrder, totalAmount]
+    () => ({ state, setGuests, setTable, setBookingInfo, setDepositAmount, addItem, updateItemQuantity, removeItem, clearOrder, totalAmount }),
+    [state, setGuests, setTable, setBookingInfo, setDepositAmount, addItem, updateItemQuantity, removeItem, clearOrder, totalAmount]
   );
 
   return <OrderContext.Provider value={value}>{children}</OrderContext.Provider>;

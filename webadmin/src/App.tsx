@@ -6,6 +6,8 @@ import { Toaster, toast } from 'react-hot-toast';
 import AuthSimple from './components/AuthSimple';
 import PaymentsAdmin from './components/PaymentsAdmin';
 import PaymentAdmin from './components/PaymentAdmin';
+import DepositPaymentModal from './components/DepositPaymentModal';
+import TransactionHistory from './components/TransactionHistory';
 
 type TableHistoryEntry = {
   _id: string;
@@ -31,6 +33,21 @@ type Menu = {
 };
 
 const API = import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000';
+
+// Axios interceptor để xử lý lỗi 401
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Xóa token và user khỏi localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Reload trang để quay về màn hình đăng nhập
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
 
 const emptyForm: Omit<Menu, '_id'> = {
   name: '',
@@ -298,7 +315,7 @@ export default function App() {
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              Thanh toán bàn
+              THANH TOÁN NGAY
             </button>
             
             <button 
@@ -327,6 +344,20 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               Lịch sử bàn
+            </button>
+            
+            <button 
+              onClick={() => setTab('transactions')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'transactions' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Lịch sử giao dịch
             </button>
           </div>
         </nav>
@@ -364,9 +395,10 @@ export default function App() {
               {tab === 'employees' && 'Quản lý Nhân viên'}
               {tab === 'customers' && 'Quản lý Khách hàng'}
               {tab === 'bookings' && 'Quản lý Đặt bàn'}
-              {tab === 'payments' && 'Thanh toán Bàn'}
+              {tab === 'payments' && 'THANH TOÁN NGAY'}
               {tab === 'payment' && 'VietQR'}
               {tab === 'history' && 'Lịch sử Bàn'}
+              {tab === 'transactions' && 'Lịch sử Giao dịch'}
             </h2>
             
             <div className="flex items-center space-x-4">
@@ -517,6 +549,8 @@ export default function App() {
             <h2 className="text-xl font-semibold mb-4">Lịch sử bàn</h2>
             <p className="text-gray-300">Tính năng đang được phát triển...</p>
           </div>
+        ) : tab==='transactions' ? (
+          <TransactionHistory API={API} />
         ) : (
           <BookingsAdmin stats={stats} onStatsChange={setStats} token={token} />
         )}
@@ -1061,6 +1095,7 @@ type BookingData = {
     price: number;
   }>;
   totalAmount: number;
+  depositAmount?: number;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   notes?: string;
   confirmedBy?: {
@@ -1090,16 +1125,29 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
   const [showNewBookingAlert, setShowNewBookingAlert] = useState(false);
   const [showNewBookingForm, setShowNewBookingForm] = useState(false);
   const [newBookingForm, setNewBookingForm] = useState({
-    customerName: '',
+    customerId: '',
     customerPhone: '',
-    customerEmail: '',
     tableId: '',
     numberOfGuests: 1,
     bookingDate: new Date().toISOString().split('T')[0],
     bookingTime: new Date().toTimeString().slice(0, 5),
-    specialRequests: ''
+    specialRequests: '',
+    depositAmount: ''
   });
   const [tables, setTables] = useState<{_id: string; name: string; status: string}[]>([]);
+  const [foundCustomer, setFoundCustomer] = useState<{_id: string; username: string; fullName: string; email: string; phone: string} | null>(null);
+  const [foundCustomers, setFoundCustomers] = useState<{_id: string; username: string; fullName: string; email: string; phone: string}[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showCustomerList, setShowCustomerList] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showDepositPaymentModal, setShowDepositPaymentModal] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
+  const [depositPaymentData, setDepositPaymentData] = useState<{
+    tableId: string;
+    depositAmount: number;
+    bookingId: string;
+  } | null>(null);
 
   async function loadBookings() {
     setLoading(true);
@@ -1149,9 +1197,105 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
     }
   }
 
+  // Chọn khách hàng cụ thể từ danh sách
+  function selectCustomer(customer: {_id: string; username: string; fullName: string; email: string; phone: string}) {
+    console.log('👤 Customer selected:', customer);
+    setFoundCustomer(customer);
+    setFoundCustomers([]);
+    setShowCustomerList(false);
+    setNewBookingForm(prev => ({
+      ...prev,
+      customerId: customer._id,
+      customerPhone: customer.phone
+    }));
+  }
+
+  // Tìm kiếm khách hàng theo SĐT
+  async function searchCustomerByPhone(phone: string) {
+    console.log('🔍 searchCustomerByPhone called with:', phone, 'length:', phone?.length);
+    
+    if (!phone || phone.length < 8) {
+      console.log('❌ Phone too short or empty, skipping search');
+      setFoundCustomer(null);
+      return;
+    }
+
+    console.log('🔍 Searching for customer with phone:', phone);
+    setSearching(true);
+    try {
+      const url = `${API}/api/bookings/search-customers?phone=${encodeURIComponent(phone)}`;
+      console.log('📡 Calling API:', url);
+      
+      const res = await axios.get(url);
+      const customers = res.data.customers || [];
+      
+      console.log('✅ API response:', res.data);
+      console.log('📋 Found customers:', customers);
+      
+      if (customers.length > 0) {
+        if (customers.length === 1) {
+          // Chỉ có 1 khách hàng
+          const customer = customers[0];
+          console.log('👤 Selected customer (single):', customer);
+          setFoundCustomer(customer);
+          setFoundCustomers([]);
+          setShowCustomerList(false);
+          setNewBookingForm(prev => ({
+            ...prev,
+            customerId: customer._id,
+            customerPhone: customer.phone
+          }));
+        } else {
+          // Có nhiều khách hàng trùng SĐT - hiển thị danh sách lựa chọn
+          console.log('⚠️ Multiple customers found with same phone:', customers.length);
+          setFoundCustomers(customers);
+          setFoundCustomer(null);
+          setShowCustomerList(true);
+          setNewBookingForm(prev => ({
+            ...prev,
+            customerId: '',
+            customerPhone: phone
+          }));
+        }
+      } else {
+        console.log('❌ No customers found');
+        setFoundCustomer(null);
+        setFoundCustomers([]);
+        setShowCustomerList(false);
+        setNewBookingForm(prev => ({
+          ...prev,
+          customerId: '',
+          customerPhone: phone
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error searching customer by phone:', error);
+      setFoundCustomer(null);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  const depositOptions = [
+    { label: '50.000đ', value: '50000' },
+    { label: '100.000đ', value: '100000' },
+    { label: '200.000đ', value: '200000' },
+    { label: '500.000đ', value: '500000' }
+  ];
+
+  const handleDepositSelect = (amount) => {
+    setNewBookingForm(prev => ({ ...prev, depositAmount: amount }));
+    setShowDepositModal(false);
+  };
+
+  const handleDepositClear = () => {
+    setNewBookingForm(prev => ({ ...prev, depositAmount: '' }));
+    setShowDepositModal(false);
+  };
+
   async function createNewBooking() {
-    if (!newBookingForm.customerName.trim()) {
-      toast.error('Vui lòng nhập tên khách hàng');
+    if (!newBookingForm.customerPhone.trim()) {
+      toast.error('Vui lòng nhập số điện thoại');
       return;
     }
     if (!newBookingForm.tableId) {
@@ -1161,18 +1305,39 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 
     try {
       const res = await axios.post(`${API}/api/bookings/admin-quick-booking`, newBookingForm);
-      toast.success('Tạo booking thành công!');
+      
+      // Kiểm tra xem có phải khách hàng có sẵn trong hệ thống không
+      const isExistingCustomer = newBookingForm.customerId;
+      
+      if (isExistingCustomer && foundCustomer) {
+        toast.success(`🎉 Đặt bàn thành công! Khách hàng ${foundCustomer.fullName} sẽ nhận được thông báo qua app.`);
+      } else {
+        toast.success('Tạo booking thành công!');
+      }
+      
+      // Nếu có số tiền cọc, hiển thị modal thanh toán cọc
+      const depositAmount = parseInt(newBookingForm.depositAmount) || 0;
+      if (depositAmount > 0) {
+        setDepositPaymentData({
+          tableId: newBookingForm.tableId,
+          depositAmount: depositAmount,
+          bookingId: res.data.booking._id
+        });
+        setShowDepositPaymentModal(true);
+      }
+      
       setShowNewBookingForm(false);
       setNewBookingForm({
-        customerName: '',
+        customerId: '',
         customerPhone: '',
-        customerEmail: '',
         tableId: '',
         numberOfGuests: 1,
         bookingDate: new Date().toISOString().split('T')[0],
         bookingTime: new Date().toTimeString().slice(0, 5),
-        specialRequests: ''
+        specialRequests: '',
+        depositAmount: ''
       });
+      setFoundCustomer(null);
       loadBookings();
       loadStats();
     } catch (error: any) {
@@ -1192,6 +1357,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
     }
   }, [showNewBookingForm]);
 
+
   // Auto refresh bookings every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1208,12 +1374,36 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
       return;
     }
 
-    console.log('Confirming booking:', bookingId);
-    console.log('Token:', token);
-    console.log('API URL:', API);
+    const booking = bookings.find(b => b._id === bookingId);
+    if (!booking) {
+      toast.error('Không tìm thấy booking');
+      return;
+    }
+
+    // Nếu có cọc tiền, hiển thị modal chọn phương thức thanh toán
+    console.log('Booking depositAmount:', booking.depositAmount);
+    if (booking.depositAmount && booking.depositAmount > 0) {
+      console.log('Showing payment method modal');
+      setSelectedBooking(booking);
+      setShowPaymentMethodModal(true);
+    } else {
+      console.log('No deposit, confirming directly');
+      // Không có cọc, xác nhận trực tiếp
+      await confirmBooking(bookingId, 'cash');
+    }
+  };
+
+  const confirmBooking = async (bookingId: string, method: 'cash' | 'bank_transfer') => {
+    console.log('Confirming booking:', bookingId, 'with method:', method);
 
     try {
-      const res = await axios.post(`${API}/api/bookings/${bookingId}/confirm`, {}, {
+      const booking = bookings.find(b => b._id === bookingId);
+      const depositAmount = booking?.depositAmount || 0;
+      
+      const res = await axios.post(`${API}/api/bookings/${bookingId}/confirm`, {
+        depositAmount: depositAmount,
+        paymentMethod: method
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -1223,10 +1413,20 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
         toast.success('Xác nhận booking thành công!');
         loadBookings();
         loadStats();
+        setShowPaymentMethodModal(false);
+        setSelectedBooking(null);
       }
     } catch (error: any) {
       console.error('Confirm error:', error);
       console.error('Error response:', error.response?.data);
+      
+      // Xử lý lỗi token hết hạn
+      if (error.response?.status === 401) {
+        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        handleLogout();
+        return;
+      }
+      
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
@@ -1260,6 +1460,14 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
     } catch (error: any) {
       console.error('Cancel error:', error);
       console.error('Error response:', error.response?.data);
+      
+      // Xử lý lỗi token hết hạn
+      if (error.response?.status === 401) {
+        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        handleLogout();
+        return;
+      }
+      
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
@@ -1423,6 +1631,11 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                     <div>
                       <span className="font-medium">Số người:</span> {booking.numberOfGuests}
                     </div>
+                    {booking.depositAmount > 0 && (
+                      <div>
+                        <span className="font-medium">💰 Cọc:</span> {booking.depositAmount.toLocaleString()}đ
+                      </div>
+                    )}
                     <div>
                       <span className="font-medium">Ngày:</span> {new Date(booking.bookingDate).toLocaleDateString('vi-VN')}
                     </div>
@@ -1435,6 +1648,11 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                   <div className="text-lg font-bold text-red-600">
                     {booking.totalAmount.toLocaleString()}đ
                   </div>
+                  {booking.depositAmount > 0 && (
+                    <div className="text-sm font-medium text-green-600">
+                      💰 Cọc: {booking.depositAmount.toLocaleString()}đ
+                    </div>
+                  )}
                   <div className="text-sm text-gray-400">
                     {new Date(booking.createdAt).toLocaleString('vi-VN')}
                   </div>
@@ -1451,6 +1669,20 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                       <span className="font-medium">{(item.price * item.quantity).toLocaleString()}đ</span>
                     </div>
                   ))}
+                </div>
+                
+                {/* Tổng tiền và cọc */}
+                <div className="mt-3 pt-3 border-t border-gray-600">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>Tổng tiền món:</span>
+                    <span className="text-red-400">{booking.totalAmount.toLocaleString()}đ</span>
+                  </div>
+                  {booking.depositAmount > 0 && (
+                    <div className="flex justify-between text-sm font-medium mt-1">
+                      <span className="text-green-400">💰 Tiền cọc:</span>
+                      <span className="text-green-400">{booking.depositAmount.toLocaleString()}đ</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1527,46 +1759,197 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
           <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Tạo booking mới</h2>
             
+            {/* Thông báo hướng dẫn */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">💡 Hướng dẫn</h3>
+                  <div className="mt-1 text-sm text-blue-700">
+                    <p>• <strong>Nhập số điện thoại</strong> để tìm kiếm khách hàng có sẵn trong hệ thống</p>
+                    <p>• Nếu tìm thấy khách hàng, họ sẽ nhận được thông báo riêng qua app</p>
+                    <p>• Nếu không tìm thấy, sẽ gửi thông báo chung cho tất cả khách hàng</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tên khách hàng *
-                  </label>
-                  <input
-                    type="text"
-                    value={newBookingForm.customerName}
-                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerName: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nhập tên khách hàng"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Số điện thoại
+                    Số điện thoại khách hàng *
                   </label>
                   <input
                     type="tel"
                     value={newBookingForm.customerPhone}
-                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerPhone: e.target.value }))}
+                    onChange={(e) => {
+                      const phone = e.target.value;
+                      console.log('📱 Phone input changed:', phone);
+                      setNewBookingForm(prev => ({ ...prev, customerPhone: phone }));
+                      searchCustomerByPhone(phone);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nhập số điện thoại"
+                    placeholder="Nhập số điện thoại để tìm kiếm khách hàng..."
                   />
+                  
+                  {/* Hiển thị trạng thái tìm kiếm */}
+                  {searching && (
+                    <div className="mt-2 text-sm text-gray-500">Đang tìm kiếm...</div>
+                  )}
+                  
+         {/* Danh sách khách hàng trùng SĐT - Nhỏ gọn */}
+         {showCustomerList && foundCustomers.length > 0 && (
+           <div className="mt-3 bg-white rounded-lg shadow-md border border-gray-200">
+             {/* Header */}
+             <div className="bg-indigo-600 px-4 py-2 rounded-t-lg">
+               <div className="flex items-center justify-between">
+                 <div className="flex items-center">
+                   <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                   </svg>
+                   <span className="text-white font-medium text-sm">Chọn khách hàng ({foundCustomers.length})</span>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setFoundCustomers([]);
+                     setShowCustomerList(false);
+                     setNewBookingForm(prev => ({
+                       ...prev,
+                       customerId: '',
+                       customerPhone: ''
+                     }));
+                   }}
+                   className="text-white hover:bg-white/20 rounded p-1"
+                 >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+             </div>
+             
+             {/* Customer List */}
+             <div className="p-3 max-h-48 overflow-y-auto">
+               <div className="space-y-2">
+                 {foundCustomers.map((customer, index) => (
+                   <div 
+                     key={customer._id}
+                     className="group flex items-center p-2 bg-gray-50 hover:bg-indigo-50 rounded cursor-pointer transition-colors border border-gray-200 hover:border-indigo-300"
+                     onClick={() => selectCustomer(customer)}
+                   >
+                     {/* Avatar */}
+                     <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                       <span className="text-white font-bold text-xs">
+                         {customer.fullName.charAt(0).toUpperCase()}
+                       </span>
+                     </div>
+                     
+                     {/* Info */}
+                     <div className="flex-1 min-w-0">
+                       <div className="flex items-center justify-between">
+                         <div className="min-w-0 flex-1">
+                           <h4 className="text-sm font-medium text-gray-900 truncate">
+                             {customer.fullName}
+                           </h4>
+                           <p className="text-xs text-gray-500 truncate">
+                             @{customer.username}
+                           </p>
+                         </div>
+                         <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                           <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                           </svg>
+                         </div>
+                       </div>
+                       <div className="text-xs text-gray-500 truncate mt-1">
+                         {customer.email} • {customer.phone}
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* Thông tin khách hàng đã chọn - Nhỏ gọn */}
+         {foundCustomer && !showCustomerList && (
+           <div className="mt-3 bg-white rounded-lg shadow-md border border-gray-200">
+             {/* Header */}
+             <div className="bg-emerald-600 px-4 py-2 rounded-t-lg">
+               <div className="flex items-center justify-between">
+                 <div className="flex items-center">
+                   <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                   </svg>
+                   <span className="text-white font-medium text-sm">Khách hàng đã chọn</span>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setFoundCustomer(null);
+                     setNewBookingForm(prev => ({
+                       ...prev,
+                       customerId: '',
+                       customerPhone: ''
+                     }));
+                   }}
+                   className="text-white hover:bg-white/20 rounded p-1"
+                 >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+             </div>
+             
+             {/* Customer Info */}
+             <div className="p-3">
+               <div className="flex items-center">
+                 {/* Avatar */}
+                 <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                   <span className="text-white font-bold text-sm">
+                     {foundCustomer.fullName.charAt(0).toUpperCase()}
+                   </span>
+                 </div>
+                 
+                 {/* Info */}
+                 <div className="flex-1 min-w-0">
+                   <h4 className="text-sm font-semibold text-gray-900 truncate">{foundCustomer.fullName}</h4>
+                   <p className="text-xs text-gray-500 truncate">@{foundCustomer.username}</p>
+                   <div className="text-xs text-gray-500 truncate mt-1">
+                     {foundCustomer.email} • {foundCustomer.phone}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
+                  
+                  {/* Thông báo không tìm thấy - Nhỏ gọn */}
+                  {!searching && newBookingForm.customerPhone && !foundCustomer && !showCustomerList && newBookingForm.customerPhone.length >= 10 && (
+                    <div className="mt-3 bg-white rounded-lg shadow-md border border-gray-200">
+                      <div className="bg-amber-500 px-4 py-2 rounded-t-lg">
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          <span className="text-white font-medium text-sm">Không tìm thấy khách hàng</span>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-sm text-gray-600">Sẽ gửi thông báo chung cho khách hàng mới</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newBookingForm.customerEmail}
-                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, customerEmail: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nhập email"
-                  />
-                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1637,6 +2020,39 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
                   placeholder="Nhập yêu cầu đặc biệt (nếu có)"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Số tiền cọc (VND)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowDepositModal(true)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-left flex justify-between items-center"
+                >
+                  <span className={newBookingForm.depositAmount ? 'text-gray-900' : 'text-gray-500'}>
+                    {newBookingForm.depositAmount ? `${parseInt(newBookingForm.depositAmount).toLocaleString()}đ` : 'Chọn số tiền cọc'}
+                  </span>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {newBookingForm.depositAmount && (
+                  <button
+                    type="button"
+                    onClick={handleDepositClear}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Xóa
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Số tiền cọc sẽ được hiển thị trong mục thanh toán bàn
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-2 mt-6">
@@ -1655,6 +2071,72 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal chọn số tiền cọc */}
+      {showDepositModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-white rounded-t-xl w-full max-w-md">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Chọn số tiền cọc</h3>
+              <button
+                onClick={() => setShowDepositModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-2">
+              {depositOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleDepositSelect(option.value)}
+                  className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
+                >
+                  <span className="text-gray-900 font-medium">{option.label}</span>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+              
+              <button
+                onClick={handleDepositClear}
+                className="w-full flex items-center justify-center p-3 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
+              >
+                <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span className="text-red-600 font-medium">Không cọc</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal thanh toán cọc */}
+      {depositPaymentData && (
+        <DepositPaymentModal
+          isOpen={showDepositPaymentModal}
+          onClose={() => {
+            setShowDepositPaymentModal(false);
+            setDepositPaymentData(null);
+          }}
+          onDepositSuccess={() => {
+            setShowDepositPaymentModal(false);
+            setDepositPaymentData(null);
+            loadBookings();
+            loadStats();
+            toast.success('🎉 Bàn đã được cọc thành công!');
+          }}
+          tableId={depositPaymentData.tableId}
+          depositAmount={depositPaymentData.depositAmount}
+          bookingId={depositPaymentData.bookingId}
+          API={API}
+        />
       )}
     </div>
   );
@@ -1888,6 +2370,90 @@ function TablesAdmin() {
             )}
             <div className="flex justify-end">
               <button onClick={()=>setDetailOpen(false)} className="px-4 py-2 rounded-md border">Đóng</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      {/* Payment Method Modal */}
+      {console.log('showPaymentMethodModal:', showPaymentMethodModal)}
+      <Dialog open={showPaymentMethodModal} onClose={() => setShowPaymentMethodModal(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
+            <Dialog.Title className="text-lg font-semibold">Chọn phương thức thanh toán cọc</Dialog.Title>
+            
+            {selectedBooking && (
+              <div className="space-y-3">
+                <div className="bg-gray-700 p-3 rounded-lg">
+                  <div className="text-sm text-gray-300">Thông tin booking:</div>
+                  <div className="text-white font-medium">Bàn: {selectedBooking.table?.name}</div>
+                  <div className="text-white">Số tiền cọc: {selectedBooking.depositAmount?.toLocaleString()}đ</div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-700">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="cash"
+                      checked={paymentMethod === 'cash'}
+                      onChange={(e) => setPaymentMethod(e.target.value as 'cash')}
+                      className="text-green-500"
+                    />
+                    <div>
+                      <div className="font-medium text-white">💰 Tiền mặt</div>
+                      <div className="text-sm text-gray-400">Xác nhận trực tiếp, không cần QR</div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-700">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="bank_transfer"
+                      checked={paymentMethod === 'bank_transfer'}
+                      onChange={(e) => setPaymentMethod(e.target.value as 'bank_transfer')}
+                      className="text-green-500"
+                    />
+                    <div>
+                      <div className="font-medium text-white">🏦 Chuyển khoản</div>
+                      <div className="text-sm text-gray-400">Hiển thị QR code để thanh toán</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button 
+                onClick={() => setShowPaymentMethodModal(false)} 
+                className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={() => {
+                  if (selectedBooking) {
+                    if (paymentMethod === 'bank_transfer') {
+                      // Hiển thị QR code
+                      setDepositPaymentData({
+                        tableId: selectedBooking.table?._id || selectedBooking.table,
+                        depositAmount: selectedBooking.depositAmount || 0,
+                        bookingId: selectedBooking._id
+                      });
+                      setShowDepositPaymentModal(true);
+                      setShowPaymentMethodModal(false);
+                    } else {
+                      // Xác nhận trực tiếp
+                      confirmBooking(selectedBooking._id, 'cash');
+                    }
+                  }
+                }}
+                className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
+              >
+                {paymentMethod === 'bank_transfer' ? 'Hiển thị QR' : 'Xác nhận'}
+              </button>
             </div>
           </Dialog.Panel>
         </div>

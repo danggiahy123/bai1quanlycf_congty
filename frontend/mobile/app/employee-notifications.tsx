@@ -185,13 +185,13 @@ export default function EmployeeNotificationsScreen() {
       
       {item.bookingId && (
         <View style={styles.bookingInfo}>
-          <ThemedText style={styles.bookingText}>
-            📍 {item.bookingId.table} • 👥 {item.bookingId.numberOfGuests} người
+          <ThemedText style={styles.bookingText} numberOfLines={1}>
+            🏷️ Bàn: {item.bookingId.table} • 👥 {item.bookingId.numberOfGuests} người
           </ThemedText>
-          <ThemedText style={styles.bookingText}>
-            📅 {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} • 🕐 {item.bookingId.bookingTime}
+          <ThemedText style={styles.bookingText} numberOfLines={1}>
+            📅 {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} lúc {item.bookingId.bookingTime}
           </ThemedText>
-          <ThemedText style={styles.bookingText}>
+          <ThemedText style={styles.bookingText} numberOfLines={1}>
             💰 {item.bookingId.totalAmount.toLocaleString()}đ • 📊 {item.bookingId.status}
           </ThemedText>
         </View>

@@ -201,6 +201,87 @@ router.post('/reset-all', async (req, res) => {
   }
 });
 
+// Trả bàn - xóa dữ liệu bàn đang sử dụng mà chưa thanh toán
+router.post('/:id/return', async (req, res) => {
+  try {
+    const tableId = req.params.id;
+    
+    // Tìm bàn
+    const table = await Table.findById(tableId);
+    if (!table) {
+      return res.status(404).json({ error: 'Không tìm thấy bàn' });
+    }
+    
+    // Kiểm tra bàn có đang occupied không
+    if (table.status !== 'occupied') {
+      return res.status(400).json({ 
+        error: 'Bàn này không đang được sử dụng. Chỉ có thể trả bàn đang occupied.' 
+      });
+    }
+    
+    // Xóa order liên quan đến bàn này
+    const deletedOrder = await Order.findOneAndDelete({ tableId });
+    
+    // Tìm booking liên quan để cập nhật trạng thái
+    const Booking = require('../models/Booking');
+    const booking = await Booking.findOne({ 
+      table: tableId, 
+      status: { $in: ['pending', 'confirmed'] } 
+    });
+    
+    if (booking) {
+      // Cập nhật booking thành cancelled
+      booking.status = 'cancelled';
+      booking.cancelledAt = new Date();
+      booking.cancelReason = 'Trả bàn bởi nhân viên';
+      await booking.save();
+    }
+    
+    // Reset bàn về trạng thái empty
+    table.status = 'empty';
+    await table.save();
+    
+    // Log lịch sử
+    await logTableHistory(
+      table._id,
+      table.name,
+      'RETURNED',
+      req.body.performedBy || 'admin',
+      req.body.performedByName || 'Admin',
+      {
+        note: 'Trả bàn - xóa dữ liệu chưa thanh toán',
+        deletedOrderId: deletedOrder?._id,
+        bookingId: booking?._id
+      }
+    );
+    
+    res.json({
+      success: true,
+      message: `Đã trả bàn ${table.name} thành công`,
+      table: {
+        id: table._id,
+        name: table.name,
+        status: table.status
+      },
+      deletedOrder: deletedOrder ? {
+        id: deletedOrder._id,
+        totalAmount: deletedOrder.items?.reduce((sum, item) => sum + (item.price * item.quantity), 0) || 0
+      } : null,
+      cancelledBooking: booking ? {
+        id: booking._id,
+        customerName: booking.customerInfo?.fullName || 'Khách hàng'
+      } : null
+    });
+    
+  } catch (err) {
+    console.error('Error returning table:', err);
+    res.status(500).json({ 
+      error: err.message,
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
 module.exports = router;
 
 

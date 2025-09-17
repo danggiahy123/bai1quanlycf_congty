@@ -20,6 +20,8 @@ interface PaymentModalProps {
   tableId: string;
   totalAmount: number;
   API: string;
+  depositAmount?: number;
+  orderAmount?: number;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ 
@@ -28,7 +30,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   onPaymentSuccess, 
   tableId, 
   totalAmount, 
-  API 
+  API,
+  depositAmount = 0,
+  orderAmount = 0
 }) => {
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,13 +114,32 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   };
 
   // Xác nhận thanh toán thành công
-  const confirmPayment = () => {
-    setPaymentStatus('paid');
-    toast.success('Xác nhận thanh toán thành công!');
-    setTimeout(() => {
-      onPaymentSuccess();
-      onClose();
-    }, 1500);
+  const confirmPayment = async () => {
+    try {
+      // Gọi API để xác nhận thanh toán
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://192.168.5.74:5000'}/api/orders/by-table/${tableId}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setPaymentStatus('paid');
+        toast.success('✅ Thanh toán thành công! Bàn đã được giải phóng.');
+        setTimeout(() => {
+          onPaymentSuccess();
+          onClose();
+        }, 1500);
+      } else {
+        const errorData = await response.json();
+        toast.error(`❌ Lỗi thanh toán: ${errorData.error || 'Có lỗi xảy ra'}`);
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast.error('❌ Lỗi kết nối. Vui lòng thử lại.');
+    }
   };
 
   // Hủy thanh toán
@@ -134,8 +157,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         amount: totalAmount,
         description: `Thanh toan ban ${tableId}`
       }));
+      // Auto-generate QR code when modal opens
+      setTimeout(() => {
+        if (banks.length > 0) {
+          generateQRCode();
+        }
+      }, 1000); // Wait for banks to load
     }
-  }, [isOpen, totalAmount, tableId]);
+  }, [isOpen, totalAmount, tableId, banks.length]);
 
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
@@ -145,93 +174,90 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <Dialog.Panel className="mx-auto max-w-2xl w-full bg-white rounded-lg shadow-xl">
           <div className="p-6">
             <Dialog.Title className="text-2xl font-bold text-gray-900 mb-4">
-              💳 Thanh toán bàn {tableId}
+              💳 THANH TOÁN NGAY - Bàn {tableId}
             </Dialog.Title>
             
-            <div className="mb-6 p-4 bg-green-50 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-gray-700">Tổng tiền:</span>
-                <span className="text-2xl font-bold text-green-600">
-                  {totalAmount.toLocaleString('vi-VN')}đ
-                </span>
+            <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="space-y-2 mb-3">
+                {orderAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">Tổng đơn hàng:</span>
+                    <span className="text-lg font-semibold text-gray-900">
+                      {orderAmount.toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                )}
+                {depositAmount > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-orange-600">Số tiền cọc:</span>
+                    <span className="text-lg font-semibold text-orange-600">
+                      {depositAmount.toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-green-300">
+                  <span className="text-lg font-semibold text-gray-700">💰 Tổng thanh toán:</span>
+                  <span className="text-2xl font-bold text-green-600">
+                    {totalAmount.toLocaleString('vi-VN')}đ
+                  </span>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                <p>📱 Quét mã QR bên dưới để chuyển khoản</p>
+                <p>⏰ Sau khi chuyển khoản, nhấn "THANH TOÁN THÀNH CÔNG"</p>
               </div>
             </div>
 
             {!qrCode ? (
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Chọn ngân hàng
-                  </label>
-                  <select
-                    value={selectedBank?.id || ''}
-                    onChange={(e) => {
-                      const bank = banks.find(b => b.id === parseInt(e.target.value));
-                      setSelectedBank(bank || null);
-                      if (bank) {
-                        setPaymentInfo(prev => ({ ...prev, bankCode: bank.bin }));
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Chọn ngân hàng</option>
-                    {banks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name} ({bank.shortName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={generateQRCode}
-                    disabled={loading || !selectedBank}
-                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? '⏳ Đang tạo...' : '📱 Tạo QR Code'}
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
-                  >
-                    Hủy
-                  </button>
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                  <p className="text-gray-600 font-medium">Đang tạo QR code thanh toán...</p>
+                  <p className="text-sm text-gray-500 mt-2">Vui lòng chờ trong giây lát</p>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 {paymentStatus === 'pending' && (
                   <div className="text-center">
-                    <div className="mb-4 p-4 bg-yellow-50 rounded-lg">
-                      <p className="text-yellow-800 font-semibold">
-                        ⏳ Đang chờ khách hàng thanh toán...
+                    <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                      <p className="text-green-800 font-bold text-lg">
+                        💳 QR CODE THANH TOÁN
+                      </p>
+                      <p className="text-green-700 font-medium">
+                        Quét mã QR để thanh toán {totalAmount.toLocaleString('vi-VN')}đ
                       </p>
                     </div>
                     
-                    <div className="flex justify-center mb-4">
-                      <img 
-                        src={qrCode} 
-                        alt="QR Code thanh toán" 
-                        className="max-w-xs max-h-xs border border-gray-300 rounded-lg"
-                      />
+                    <div className="flex justify-center mb-6">
+                      <div className="bg-white p-4 rounded-xl shadow-lg border-2 border-green-200">
+                        <img 
+                          src={qrCode} 
+                          alt="QR Code thanh toán" 
+                          className="w-64 h-64 border border-gray-300 rounded-lg"
+                        />
+                      </div>
                     </div>
                     
-                    <div className="text-sm text-gray-600 mb-4">
-                      <p>Quét mã QR để chuyển tiền đến {paymentInfo.accountName}</p>
-                      <p>{selectedBank?.name} - {paymentInfo.accountNumber}</p>
+                    <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                      <div className="text-sm text-gray-700 space-y-1">
+                        <p><span className="font-semibold">Tài khoản:</span> {paymentInfo.accountName}</p>
+                        <p><span className="font-semibold">Số tài khoản:</span> {paymentInfo.accountNumber}</p>
+                        <p><span className="font-semibold">Ngân hàng:</span> {selectedBank?.name}</p>
+                        <p><span className="font-semibold">Nội dung:</span> {paymentInfo.description}</p>
+                      </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <button
                         onClick={confirmPayment}
-                        className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                        className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
                       >
-                        ✅ Xác nhận đã thanh toán
+                        ✅ THANH TOÁN THÀNH CÔNG
                       </button>
                       <button
                         onClick={cancelPayment}
-                        className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+                        className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 font-bold shadow-lg hover:shadow-xl transition-all duration-200"
                       >
                         ❌ Hủy
                       </button>

@@ -1,146 +1,189 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, TouchableOpacity, View, Alert, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useOrder } from '@/components/order-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SelectDateTimeScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
   const { state, setBookingInfo } = useOrder();
-  
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('');
-
-  // Tạo danh sách ngày (7 ngày tới)
-  const getAvailableDates = () => {
-    const dates = [];
-    const today = new Date();
-    
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push({
-        value: date.toISOString().split('T')[0],
-        label: date.toLocaleDateString('vi-VN', { 
-          weekday: 'short', 
-          day: 'numeric',
-          month: 'short'
-        })
-      });
-    }
-    return dates;
-  };
-
-  // Tạo danh sách giờ (8:00 - 22:00)
-  const getAvailableTimes = () => {
-    const times = [];
-    for (let hour = 8; hour <= 22; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        times.push({
-          value: timeString,
-          label: timeString
-        });
-      }
-    }
-    return times;
-  };
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const handleNext = () => {
-    if (!selectedDate || !selectedTime) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn ngày và giờ');
-      return;
-    }
-
-    // Kiểm tra thời gian đặt bàn
-    const bookingDateTime = new Date(`${selectedDate}T${selectedTime}`);
-    const now = new Date();
+    // Kiểm tra ngày không được trong quá khứ
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateOnly = new Date(selectedDate);
+    selectedDateOnly.setHours(0, 0, 0, 0);
     
-    if (bookingDateTime <= now) {
-      Alert.alert('Lỗi', 'Thời gian đặt bàn phải trong tương lai');
+    if (selectedDateOnly < today) {
+      Alert.alert('Lỗi', 'Ngày đặt bàn không được trong quá khứ');
       return;
     }
 
+    // Kiểm tra nếu chọn ngày hôm nay thì giờ phải trong tương lai
+    if (selectedDateOnly.getTime() === today.getTime()) {
+      const now = new Date();
+      const selectedDateTime = new Date(selectedDate);
+      selectedDateTime.setHours(selectedTime.getHours(), selectedTime.getMinutes());
+      
+      if (selectedDateTime <= now) {
+        Alert.alert('Lỗi', 'Giờ đặt bàn phải trong tương lai');
+        return;
+      }
+    }
+
+    // Lưu thông tin ngày giờ
     setBookingInfo({
-      date: selectedDate,
-      time: selectedTime
+      date: selectedDate.toISOString().split('T')[0],
+      time: selectedTime.toTimeString().split(' ')[0].substring(0, 5)
     });
 
-    router.push('/booking-confirm');
+    router.push('/select-deposit');
   };
 
-  const dates = getAvailableDates();
-  const times = getAvailableTimes();
+  const handleBack = () => {
+    router.back();
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('vi-VN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+    }
+  };
+
+  const onTimeChange = (event: any, selectedTime?: Date) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      setSelectedTime(selectedTime);
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <ThemedText type="title">Chọn thời gian</ThemedText>
-          <ThemedText>Chọn ngày và giờ đặt bàn</ThemedText>
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <ThemedText type="title" style={styles.headerTitle}>
+          Chọn ngày giờ
+        </ThemedText>
+        <View style={styles.placeholder} />
+      </View>
 
-        <View style={styles.section}>
-          <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>📅 Chọn ngày</ThemedText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
-            {dates.map((date) => (
-              <TouchableOpacity
-                key={date.value}
-                style={[
-                  styles.dateOption,
-                  selectedDate === date.value && styles.selectedDateOption
-                ]}
-                onPress={() => setSelectedDate(date.value)}
-              >
-                <ThemedText style={[
-                  styles.dateText,
-                  selectedDate === date.value && styles.selectedDateText
-                ]}>
-                  {date.label}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.section}>
-          <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>🕐 Chọn giờ</ThemedText>
-          <View style={styles.timeContainer}>
-            {times.map((time) => (
-              <TouchableOpacity
-                key={time.value}
-                style={[
-                  styles.timeOption,
-                  selectedTime === time.value && styles.selectedTimeOption
-                ]}
-                onPress={() => setSelectedTime(time.value)}
-              >
-                <ThemedText style={[
-                  styles.timeText,
-                  selectedTime === time.value && styles.selectedTimeText
-                ]}>
-                  {time.label}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
+      <ScrollView style={styles.content}>
+        {/* Thông tin bàn */}
+        <View style={styles.infoCard}>
+          <ThemedText type="defaultSemiBold" style={styles.infoTitle}>
+            Thông tin đặt bàn
+          </ThemedText>
+          <View style={styles.infoRow}>
+            <ThemedText style={styles.infoLabel}>Bàn:</ThemedText>
+            <ThemedText style={styles.infoValue}>{state.selectedTable?.name}</ThemedText>
           </View>
+          <View style={styles.infoRow}>
+            <ThemedText style={styles.infoLabel}>Số khách:</ThemedText>
+            <ThemedText style={styles.infoValue}>{state.numberOfGuests} người</ThemedText>
+          </View>
+        </View>
+
+        {/* Chọn ngày */}
+        <View style={styles.section}>
+          <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
+            📅 Chọn ngày
+          </ThemedText>
+          <TouchableOpacity 
+            style={styles.pickerButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#16a34a" />
+            <ThemedText style={styles.pickerText}>
+              {formatDate(selectedDate)}
+            </ThemedText>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Chọn giờ */}
+        <View style={styles.section}>
+          <ThemedText type="defaultSemiBold" style={styles.sectionTitle}>
+            🕐 Chọn giờ
+          </ThemedText>
+          <TouchableOpacity 
+            style={styles.pickerButton}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time-outline" size={20} color="#16a34a" />
+            <ThemedText style={styles.pickerText}>
+              {formatTime(selectedTime)}
+            </ThemedText>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Lưu ý */}
+        <View style={styles.noteCard}>
+          <Ionicons name="information-circle" size={20} color="#3b82f6" />
+          <ThemedText style={styles.noteText}>
+            • Ngày đặt bàn không được trong quá khứ{'\n'}
+            • Nếu chọn ngày hôm nay, giờ phải trong tương lai{'\n'}
+            • Thời gian mở cửa: 7:00 - 22:00
+          </ThemedText>
         </View>
       </ScrollView>
 
-      {/* Fixed Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          onPress={handleNext} 
-          style={[styles.button, (!selectedDate || !selectedTime) && styles.buttonDisabled]}
-          disabled={!selectedDate || !selectedTime}
-        >
-          <ThemedText type="defaultSemiBold" style={styles.buttonText}>
-            {!selectedDate || !selectedTime ? 'Chọn ngày và giờ' : 'Tiếp tục →'}
-          </ThemedText>
+      {/* Nút tiếp tục */}
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+          <ThemedText style={styles.nextButtonText}>Tiếp tục</ThemedText>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
         </TouchableOpacity>
       </View>
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {/* Time Picker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={selectedTime}
+          mode="time"
+          display="default"
+          onChange={onTimeChange}
+        />
+      )}
     </ThemedView>
   );
 }
@@ -148,99 +191,114 @@ export default function SelectDateTimeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100, // Space for fixed button
+    backgroundColor: '#f8fafc',
   },
   header: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    marginBottom: 10,
-    fontSize: 16,
-  },
-  dateScroll: {
-    marginBottom: 5,
-  },
-  dateOption: {
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
-    marginRight: 10,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  selectedDateOption: {
-    backgroundColor: '#16a34a',
-    borderColor: '#16a34a',
-  },
-  dateText: {
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectedDateText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  timeContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  timeOption: {
-    padding: 10,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    minWidth: 70,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingTop: 50,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
-  selectedTimeOption: {
-    backgroundColor: '#28a745',
-    borderColor: '#28a745',
+  backButton: {
+    padding: 8,
   },
-  timeText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  selectedTimeText: {
-    color: '#fff',
+  headerTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#333',
   },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  placeholder: {
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  infoCard: {
     backgroundColor: '#fff',
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-  },
-  button: {
-    backgroundColor: '#16a34a',
-    paddingVertical: 16,
     borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  infoTitle: {
+    fontSize: 18,
+    marginBottom: 15,
+    color: '#333',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  infoLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  section: {
+    marginBottom: 25,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    marginBottom: 15,
+    color: '#333',
+  },
+  pickerButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    gap: 12,
   },
-  buttonDisabled: {
-    backgroundColor: '#6c757d',
+  pickerText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
   },
-  buttonText: {
+  noteCard: {
+    flexDirection: 'row',
+    backgroundColor: '#eff6ff',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    gap: 12,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e40af',
+    lineHeight: 20,
+  },
+  footer: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  nextButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16a34a',
+    paddingVertical: 15,
+    borderRadius: 12,
+    gap: 8,
+  },
+  nextButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

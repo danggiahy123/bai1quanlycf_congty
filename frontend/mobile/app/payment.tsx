@@ -11,8 +11,9 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { DEFAULT_API_URL } from '@/constants/api';
+import { tryApiCall } from '@/constants/api';
 
 interface Bank {
   id: number;
@@ -26,6 +27,14 @@ interface Bank {
 }
 
 export default function PaymentScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    bookingId?: string;
+    tableId?: string;
+    depositAmount?: string;
+    tableName?: string;
+  }>();
+  
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
@@ -34,8 +43,8 @@ export default function PaymentScreen() {
     accountNumber: '2246811357',
     accountName: 'DANG GIA HY',
     bankCode: '970407',
-    amount: '',
-    description: 'Thanh toan don hang'
+    amount: params.depositAmount || '',
+    description: `Coc ban ${params.tableName || 'N/A'}`
   });
 
   // Lấy danh sách ngân hàng
@@ -150,6 +159,50 @@ export default function PaymentScreen() {
   useEffect(() => {
     fetchBanks();
   }, []);
+
+  // Tự động tạo QR code khi có thông tin booking
+  useEffect(() => {
+    if (params.bookingId && params.depositAmount && selectedBank) {
+      generateQRCode();
+    }
+  }, [params.bookingId, params.depositAmount, selectedBank]);
+
+  // Xác nhận thanh toán cọc
+  const confirmPayment = async () => {
+    if (!params.bookingId) {
+      Alert.alert('Lỗi', 'Không có thông tin booking');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await tryApiCall(`/api/bookings/${params.bookingId}/confirm-deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (result.success) {
+        // Chuyển đến màn hình thành công
+        router.replace({
+          pathname: '/booking-success',
+          params: {
+            bookingId: params.bookingId,
+            tableName: params.tableName,
+            depositAmount: params.depositAmount
+          }
+        });
+      } else {
+        Alert.alert('Lỗi', result.error || 'Xác nhận thanh toán thất bại');
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      Alert.alert('Lỗi', 'Lỗi kết nối khi xác nhận thanh toán');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const screenWidth = Dimensions.get('window').width;
 
@@ -275,6 +328,21 @@ export default function PaymentScreen() {
                 </Text>
               )}
             </View>
+            
+            {/* Nút xác nhận thanh toán */}
+            {params.bookingId && (
+              <TouchableOpacity
+                style={[styles.button, styles.confirmButton]}
+                onPress={confirmPayment}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.buttonText}>✅ Đã chuyển khoản - Xác nhận</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -381,6 +449,10 @@ const styles = StyleSheet.create({
   },
   generateButton: {
     backgroundColor: '#4CAF50',
+  },
+  confirmButton: {
+    backgroundColor: '#10b981',
+    marginTop: 15,
   },
   buttonText: {
     color: 'white',

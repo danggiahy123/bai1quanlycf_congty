@@ -225,19 +225,34 @@ export default function IndexScreen() {
       <ThemedView style={styles.container}>
         <Stack.Screen options={{ title: 'Trang chủ' }} />
         <View style={styles.welcomeContainer}>
-          <Ionicons name="restaurant" size={80} color="#16a34a" />
-          <ThemedText type="title" style={styles.welcomeTitle}>
-            Chào mừng đến với nhà hàng
-          </ThemedText>
-          <ThemedText style={styles.welcomeSubtitle}>
-            Đăng nhập để sử dụng dịch vụ
-          </ThemedText>
+          {/* Logo và tên quán */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="cafe" size={60} color="#8B4513" />
+            </View>
+            <ThemedText type="title" style={styles.restaurantName}>
+              Quán Coffee waterdg
+            </ThemedText>
+            <ThemedText style={styles.restaurantSubtitle}>
+              Chào mừng bạn đến với quán cà phê
+            </ThemedText>
+          </View>
+
+          {/* Giới thiệu đơn giản */}
+          <View style={styles.introContainer}>
+            <ThemedText style={styles.introTitle}>Giới thiệu</ThemedText>
+            <ThemedText style={styles.introText}>
+              Quán cà phê với không gian thoải mái, phục vụ tận tình. 
+              Hãy đăng nhập để đặt bàn và thưởng thức cà phê ngon.
+            </ThemedText>
+          </View>
           
+          {/* Nút đăng nhập */}
           <TouchableOpacity
             style={styles.loginButton}
             onPress={() => router.push('/login')}
           >
-            <Ionicons name="log-in" size={20} color="#fff" />
+            <Ionicons name="log-in" size={24} color="#fff" />
             <ThemedText style={styles.loginButtonText}>Đăng nhập</ThemedText>
           </TouchableOpacity>
         </View>
@@ -444,14 +459,20 @@ export default function IndexScreen() {
                           <ThemedText style={[
                             styles.bookingText,
                             item.isRead && styles.readText
-                          ]}>
-                            Bàn: {item.bookingId.table} | {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} {item.bookingId.bookingTime}
+                          ]} numberOfLines={1}>
+                            🏷️ Bàn: {item.bookingId.table}
+                          </ThemedText>
+                          <ThemedText style={[
+                            styles.bookingText,
+                            item.isRead && styles.readText
+                          ]} numberOfLines={1}>
+                            📅 {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} lúc {item.bookingId.bookingTime}
                           </ThemedText>
                           <ThemedText style={[
                             styles.bookingAmount,
                             item.isRead && styles.readText
                           ]}>
-                            {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
+                            💰 {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
                           </ThemedText>
                           {/* Trạng thái đặt bàn */}
                           {item.type === 'booking_pending' && (
@@ -520,33 +541,82 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    backgroundColor: '#f8fafc',
   },
-  welcomeTitle: {
-    fontSize: 24,
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  restaurantName: {
+    fontSize: 28,
     fontWeight: 'bold',
-    marginTop: 16,
+    color: '#1f2937',
+    textAlign: 'center',
     marginBottom: 8,
+  },
+  restaurantSubtitle: {
+    fontSize: 16,
+    color: '#6b7280',
     textAlign: 'center',
   },
-  welcomeSubtitle: {
-    fontSize: 16,
-    opacity: 0.7,
-    textAlign: 'center',
+  introContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    width: '100%',
+  },
+  introTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  introText: {
+    fontSize: 15,
+    color: '#6b7280',
+    lineHeight: 22,
+    textAlign: 'center',
   },
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#16a34a',
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 12,
-    gap: 8,
+    gap: 12,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   loginButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   employeeHeader: {
     flexDirection: 'row',
@@ -872,11 +942,13 @@ const styles = StyleSheet.create({
   notificationCard: {
     backgroundColor: '#f9fafb',
     borderRadius: 8,
-    padding: 12,
+    padding: 10,
     marginBottom: 8,
+    marginHorizontal: 4,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     position: 'relative',
+    maxWidth: '100%',
   },
   unreadCard: {
     backgroundColor: '#f0fdf4',
@@ -904,9 +976,11 @@ const styles = StyleSheet.create({
   },
   notificationContent: {
     flex: 1,
+    minWidth: 0,
   },
   notificationTextContent: {
     flex: 1,
+    minWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -957,9 +1031,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bookingText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
     marginBottom: 2,
+    flexWrap: 'wrap',
   },
   bookingAmount: {
     fontSize: 14,

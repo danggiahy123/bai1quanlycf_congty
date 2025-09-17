@@ -48,6 +48,12 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     required: false // Cho phép null cho admin quick booking
   },
+  depositAmount: {
+    type: Number,
+    required: false,
+    default: 0,
+    min: 0
+  },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'cancelled', 'completed'],

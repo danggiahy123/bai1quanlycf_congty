@@ -68,7 +68,7 @@ app.get('/api/debug/db', async (req, res) => {
 
 // DB connect and server start
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cafe_app';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/restaurant_management';
 
 async function start() {
   try {

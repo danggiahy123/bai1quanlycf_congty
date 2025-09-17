@@ -60,7 +60,7 @@ export default function SelectItemsScreen() {
       Alert.alert('Thông báo', 'Vui lòng chọn ít nhất một món');
       return;
     }
-    router.push('/order-confirm');
+    router.push('/select-datetime');
   };
 
   return (

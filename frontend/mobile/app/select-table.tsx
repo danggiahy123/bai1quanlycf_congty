@@ -7,6 +7,7 @@ import { useOrder } from '@/components/order-context';
 import { useTables } from '@/components/tables-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_API_URL } from '@/constants/api';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SelectTableScreen() {
   const router = useRouter();
@@ -15,7 +16,19 @@ export default function SelectTableScreen() {
   const params = useLocalSearchParams<{ mode?: string; numberOfGuests?: string }>();
 
   const API_URL = DEFAULT_API_URL;
-  const [tables, setTables] = useState<{ id: string; name: string; status: 'empty' | 'occupied'; note?: string; occupiedBy?: string }[]>([]);
+  const [tables, setTables] = useState<{ 
+    id: string; 
+    name: string; 
+    status: 'empty' | 'occupied'; 
+    note?: string; 
+    occupiedBy?: string;
+    capacity?: number;
+    location?: string;
+    features?: string[];
+    price?: number;
+    description?: string;
+    isPremium?: boolean;
+  }[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
@@ -59,6 +72,12 @@ export default function SelectTableScreen() {
           name: String(t.name ?? ''),
           status: (t.status === 'occupied' ? 'occupied' : 'empty') as 'empty' | 'occupied',
           note: t.note ? String(t.note) : undefined,
+          capacity: t.capacity || 4,
+          location: t.location || 'main_hall',
+          features: t.features || [],
+          price: t.price || 0,
+          description: t.description || '',
+          isPremium: t.isPremium || false,
         }));
         if (mounted) setTables(mapped);
       } catch (e: any) {
@@ -72,6 +91,42 @@ export default function SelectTableScreen() {
       mounted = false;
     };
   }, [API_URL]);
+
+  // Helper functions
+  const getLocationIcon = (location: string) => {
+    switch (location) {
+      case 'window': return 'sunny';
+      case 'air_conditioned': return 'snow';
+      case 'outdoor': return 'leaf';
+      case 'private_room': return 'lock-closed';
+      case 'main_hall': return 'people';
+      default: return 'restaurant';
+    }
+  };
+
+  const getLocationText = (location: string) => {
+    switch (location) {
+      case 'window': return 'Cửa sổ';
+      case 'air_conditioned': return 'Máy lạnh';
+      case 'outdoor': return 'Ngoài trời';
+      case 'private_room': return 'Phòng riêng';
+      case 'main_hall': return 'Sảnh chính';
+      default: return 'Thường';
+    }
+  };
+
+  const getFeatureIcon = (feature: string) => {
+    switch (feature) {
+      case 'wifi': return 'wifi';
+      case 'power_outlet': return 'flash';
+      case 'quiet': return 'volume-mute';
+      case 'romantic': return 'heart';
+      case 'business': return 'briefcase';
+      case 'family_friendly': return 'people';
+      case 'wheelchair_accessible': return 'accessibility';
+      default: return 'checkmark';
+    }
+  };
 
   const select = async (id: string) => {
     const table = tables.find(t => t.id === id);
@@ -119,13 +174,17 @@ export default function SelectTableScreen() {
           {tables.map((t) => {
             const occupied = t.status === 'occupied' || isOccupied(t.id);
             const isSelected = state.selectedTable?.id === t.id;
+            const isCapacitySuitable = t.capacity && state.numberOfGuests ? t.capacity >= state.numberOfGuests : true;
+            
             return (
               <TouchableOpacity 
                 key={t.id} 
                 style={[
                   styles.table, 
                   occupied && styles.busy,
-                  isSelected && styles.selected
+                  isSelected && styles.selected,
+                  !isCapacitySuitable && styles.capacityWarning,
+                  t.isPremium && styles.premiumTable
                 ]} 
                 onPress={() => {
                   if (occupied) {
@@ -141,10 +200,61 @@ export default function SelectTableScreen() {
                 }}
               >
                 <View style={styles.tableContent}>
-                  <ThemedText type="defaultSemiBold" style={styles.tableName}>{t.name}</ThemedText>
+                  {/* Header với tên bàn và VIP badge */}
+                  <View style={styles.tableHeader}>
+                    <ThemedText type="defaultSemiBold" style={styles.tableName}>{t.name}</ThemedText>
+                    {t.isPremium && (
+                      <View style={styles.vipBadge}>
+                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <ThemedText style={styles.vipText}>VIP</ThemedText>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Thông tin cơ bản */}
+                  <View style={styles.tableInfo}>
+                    <View style={styles.infoRow}>
+                      <Ionicons name="people" size={14} color="#6b7280" />
+                      <ThemedText style={styles.infoText}>{t.capacity} người</ThemedText>
+                    </View>
+                    
+                    <View style={styles.infoRow}>
+                      <Ionicons name={getLocationIcon(t.location || 'main_hall')} size={14} color="#6b7280" />
+                      <ThemedText style={styles.infoText}>{getLocationText(t.location || 'main_hall')}</ThemedText>
+                    </View>
+
+                    {t.price > 0 && (
+                      <View style={styles.infoRow}>
+                        <Ionicons name="card" size={14} color="#6b7280" />
+                        <ThemedText style={styles.infoText}>{t.price.toLocaleString()}đ</ThemedText>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Features */}
+                  {t.features && t.features.length > 0 && (
+                    <View style={styles.featuresContainer}>
+                      {t.features.slice(0, 3).map((feature, index) => (
+                        <View key={index} style={styles.featureTag}>
+                          <Ionicons name={getFeatureIcon(feature)} size={10} color="#16a34a" />
+                        </View>
+                      ))}
+                      {t.features.length > 3 && (
+                        <ThemedText style={styles.moreFeaturesText}>+{t.features.length - 3}</ThemedText>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Status */}
                   <ThemedText style={[styles.tableStatus, occupied && styles.occupiedText]}>
                     {occupied ? 'Bàn đã đặt' : 'Trống'}
                   </ThemedText>
+
+                  {/* Warnings */}
+                  {!isCapacitySuitable && !occupied && (
+                    <ThemedText style={styles.warningText}>⚠️ Quá đông</ThemedText>
+                  )}
+
                   {occupied && (
                     <ThemedText style={styles.tableAction}>
                       {t.occupiedBy === userInfo?.id ? 'XEM LẠI BILL' : 'BÀN ĐÃ ĐẶT'}
@@ -204,19 +314,21 @@ const styles = StyleSheet.create({
   grid: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
-    gap: 16, 
+    gap: 12, 
     justifyContent: 'space-between',
+    paddingHorizontal: 4,
   },
   table: { 
-    width: '47%', 
-    aspectRatio: 1.2,
+    width: '48%', 
+    minHeight: 160,
+    maxHeight: 200,
     backgroundColor: '#fff',
     borderWidth: 2, 
     borderColor: '#16a34a', 
     borderRadius: 16, 
-    padding: 16, 
+    padding: 10, 
     alignItems: 'center', 
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -230,20 +342,94 @@ const styles = StyleSheet.create({
   },
   tableContent: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     flex: 1,
+    width: '100%',
+    minHeight: 140,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+  },
+  vipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 2,
+  },
+  vipText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  tableInfo: {
+    width: '100%',
+    marginBottom: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 1,
+  },
+  infoText: {
+    fontSize: 11,
+    color: '#6b7280',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  featuresContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  featureTag: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreFeaturesText: {
+    fontSize: 10,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  premiumTable: {
+    borderColor: '#FFD700',
+    backgroundColor: '#fffbf0',
+  },
+  capacityWarning: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
+  },
+  warningText: {
+    fontSize: 10,
+    color: '#f59e0b',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   tableName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#16a34a',
-    marginBottom: 8,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   tableStatus: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#16a34a',
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   occupiedText: {
     color: '#ef4444',

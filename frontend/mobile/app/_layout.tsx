@@ -11,10 +11,15 @@ export default function RootLayout() {
           <Stack.Screen name="register" options={{ title: 'Đăng ký' }} />
           <Stack.Screen name="register-info" options={{ title: 'Thông tin đăng ký' }} />
           <Stack.Screen name="home" options={{ title: 'Trang chủ' }} />
+          <Stack.Screen name="select-guests" options={{ title: 'Chọn số khách' }} />
           <Stack.Screen name="select-table" options={{ title: 'Chọn bàn' }} />
           <Stack.Screen name="select-items" options={{ title: 'Chọn món' }} />
-          <Stack.Screen name="order-confirm" options={{ title: 'Xác nhận' }} />
-          <Stack.Screen name="payment" options={{ title: 'Thanh toán' }} />
+          <Stack.Screen name="select-datetime" options={{ title: 'Chọn ngày giờ' }} />
+          <Stack.Screen name="select-deposit" options={{ title: 'Chọn cọc' }} />
+          <Stack.Screen name="order-confirm" options={{ title: 'Xác nhận đặt bàn' }} />
+          <Stack.Screen name="booking-confirm" options={{ title: 'Xác nhận booking' }} />
+          <Stack.Screen name="payment" options={{ title: 'Thanh toán QR' }} />
+          <Stack.Screen name="booking-success" options={{ headerShown: false }} />
           <Stack.Screen name="payment-success" options={{ headerShown: false }} />
         </Stack>
       </OrderProvider>
