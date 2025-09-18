@@ -162,19 +162,42 @@ export default function OrderConfirmScreen() {
       if (result.success && result.data?.status === 'completed') {
         console.log('✅ Đã phát hiện thanh toán!');
         Alert.alert(
-          'Thành công', 
-          '✅ ĐÃ NHẬN THẤY THANH TOÁN! Vui lòng đợi quán xác nhận.\n\n' +
+          '✅ ĐÃ CỌC THÀNH CÔNG, ĐANG ĐỢI QUÁN XÁC NHẬN', 
+          'Bạn đã thanh toán cọc thành công!\n\n' +
+          'Quán sẽ xác nhận trong vài phút.\n' +
           '📞 Liên hệ quán nếu cần hỗ trợ.',
           [
             { text: 'OK', onPress: () => router.replace('/') }
           ]
         );
       } else {
-        Alert.alert('Thông báo', 'Chưa phát hiện thanh toán. Vui lòng thử lại sau 30 giây.');
+        Alert.alert(
+          '⏳ CHƯA PHÁT HIỆN THANH TOÁN',
+          'Hệ thống chưa phát hiện giao dịch chuyển khoản.\n\n' +
+          'Có thể do:\n' +
+          '• Giao dịch chưa được xử lý\n' +
+          '• Thông tin chuyển khoản chưa đúng\n' +
+          '• Cần thời gian để xử lý\n\n' +
+          'Vui lòng thử lại sau 30 giây hoặc liên hệ quán.',
+          [
+            { text: 'Thử lại sau 30s', onPress: () => setTimeout(checkPaymentAutomatically, 30000) },
+            { text: 'Liên hệ quán', onPress: () => {} },
+            { text: 'Hủy', style: 'cancel' }
+          ]
+        );
       }
     } catch (error) {
-      console.error('Error checking payment:', error);
-      Alert.alert('Lỗi', 'Lỗi kiểm tra thanh toán');
+      console.error('❌ Lỗi kiểm tra thanh toán:', error);
+      Alert.alert(
+        '❌ LỖI KẾT NỐI',
+        `Không thể kiểm tra trạng thái thanh toán.\n\n` +
+        `Lỗi: ${error.message || 'Kết nối bị gián đoạn'}\n\n` +
+        `Vui lòng kiểm tra kết nối internet và thử lại.`,
+        [
+          { text: 'Thử lại', onPress: () => checkPaymentAutomatically() },
+          { text: 'Hủy', style: 'cancel' }
+        ]
+      );
     }
   };
 

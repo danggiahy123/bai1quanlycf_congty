@@ -81,22 +81,22 @@ export default function DepositPaymentScreen() {
 
       console.log('📡 Kết quả tạo QR code:', result);
 
-      if (result.success && result.data && result.data.data && result.data.data.qrCode) {
-        setQrCode(result.data.data.qrCode);
+      if (result.success && result.data && result.data.qrCode) {
+        setQrCode(result.data.qrCode);
         setPaymentStatus('pending');
-        console.log('✅ QR code đã được tạo tự động:', result.data.data.qrCode);
+        console.log('✅ QR code đã được tạo tự động:', result.data.qrCode);
       } else {
-        console.error('❌ Lỗi tạo QR code tự động:', result.error || 'Unknown error');
+        console.warn('⚠️ API response không đúng format, tạo QR code trực tiếp');
         // Thử tạo QR code trực tiếp với VietQR API
-        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}&accountName=${encodeURIComponent(paymentInfo.accountName)}`;
         setQrCode(directQRUrl);
         setPaymentStatus('pending');
         console.log('✅ Đã tạo QR code trực tiếp:', directQRUrl);
       }
     } catch (error) {
-      console.error('Error generating QR code auto:', error);
+      console.error('❌ Lỗi tạo QR code tự động:', error);
       // Thử tạo QR code trực tiếp với VietQR API
-      const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+      const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}&accountName=${encodeURIComponent(paymentInfo.accountName)}`;
       setQrCode(directQRUrl);
       setPaymentStatus('pending');
       console.log('✅ Đã tạo QR code trực tiếp (fallback):', directQRUrl);
@@ -232,25 +232,66 @@ export default function DepositPaymentScreen() {
         setCheckingPayment(false);
         setPaymentStatus('pending');
         Alert.alert(
-          'Chưa phát hiện thanh toán', 
-          '❌ Hệ thống chưa phát hiện giao dịch chuyển khoản.\n\n' +
+          '⏳ CHƯA PHÁT HIỆN THANH TOÁN', 
+          'Hệ thống chưa phát hiện giao dịch chuyển khoản.\n\n' +
+          'Có thể do:\n' +
+          '• Giao dịch chưa được xử lý\n' +
+          '• Thông tin chuyển khoản chưa đúng\n' +
+          '• Cần thời gian để xử lý\n\n' +
           '📱 Vui lòng:\n' +
           '1. Quét QR code và chuyển khoản\n' +
           '2. Đợi 1-2 phút để giao dịch được xử lý\n' +
-          '3. Nhấn "KIỂM TRA THANH TOÁN TỰ ĐỘNG" lại\n\n' +
-          'Hoặc liên hệ quán để xác nhận thủ công.',
+          '3. Thử lại hoặc xác nhận thủ công',
           [
             { text: 'Thử lại', onPress: () => checkPaymentAutomatically() },
-            { text: 'Liên hệ quán', onPress: () => {} },
+            { text: 'Xác nhận thủ công', onPress: () => confirmPaymentManually() },
+            { text: 'Hủy', style: 'cancel' }
+          ]
+        );
+      } else if (result.success === true) {
+        // Trường hợp hiếm khi API trả về true (có thể do lỗi backend)
+        setCheckingPayment(false);
+        setPaymentStatus('pending');
+        console.log('⚠️ API trả về success=true, có thể là lỗi backend');
+        Alert.alert(
+          '⚠️ LỖI HỆ THỐNG',
+          'API trả về kết quả không mong đợi.\n\n' +
+          'Vui lòng xác nhận thanh toán thủ công.',
+          [
+            { text: 'Xác nhận thủ công', onPress: () => confirmPaymentManually() },
+            { text: 'Hủy', style: 'cancel' }
+          ]
+        );
+      } else {
+        // Trường hợp không xác định
+        setCheckingPayment(false);
+        setPaymentStatus('pending');
+        console.log('⚠️ API trả về response không xác định:', result);
+        Alert.alert(
+          '⚠️ LỖI KHÔNG XÁC ĐỊNH',
+          'Hệ thống trả về kết quả không xác định.\n\n' +
+          'Vui lòng xác nhận thanh toán thủ công.',
+          [
+            { text: 'Xác nhận thủ công', onPress: () => confirmPaymentManually() },
             { text: 'Hủy', style: 'cancel' }
           ]
         );
       }
     } catch (error) {
-      console.error('Error checking payment:', error);
+      console.error('❌ Lỗi kiểm tra thanh toán:', error);
       setCheckingPayment(false);
       setPaymentStatus('pending');
-      Alert.alert('Lỗi', '❌ Lỗi kết nối khi kiểm tra thanh toán');
+      Alert.alert(
+        '❌ LỖI KẾT NỐI',
+        `Không thể kiểm tra trạng thái thanh toán.\n\n` +
+        `Lỗi: ${error.message || 'Kết nối bị gián đoạn'}\n\n` +
+        `Vui lòng kiểm tra kết nối internet và thử lại.`,
+        [
+          { text: 'Thử lại', onPress: () => checkPaymentAutomatically() },
+          { text: 'Xác nhận thủ công', onPress: () => confirmPaymentManually() },
+          { text: 'Hủy', style: 'cancel' }
+        ]
+      );
     }
   };
 
@@ -293,9 +334,9 @@ export default function DepositPaymentScreen() {
                 setPaymentStatus('checking');
                 setCheckingPayment(false);
                 Alert.alert(
-                  'Đã gửi yêu cầu!',
-                  '✅ Đã gửi yêu cầu xác nhận thanh toán!\n\n' +
-                  'Admin sẽ kiểm tra và xác nhận trong vài phút.\n' +
+                  '✅ ĐÃ CỌC THÀNH CÔNG, ĐANG ĐỢI QUÁN XÁC NHẬN',
+                  'Bạn đã thanh toán cọc thành công!\n\n' +
+                  'Quán sẽ xác nhận trong vài phút.\n' +
                   'Bạn sẽ nhận được thông báo khi được duyệt.',
                   [
                     {
@@ -307,13 +348,32 @@ export default function DepositPaymentScreen() {
               } else {
                 setCheckingPayment(false);
                 setPaymentStatus('pending');
-                Alert.alert('Lỗi', '❌ ' + (result.error || 'Lỗi khi gửi yêu cầu xác nhận'));
+                console.error('❌ Lỗi xác nhận thanh toán:', result);
+                Alert.alert(
+                  '❌ XÁC NHẬN THANH TOÁN THẤT BẠI',
+                  `Không thể xác nhận thanh toán cọc.\n\n` +
+                  `Lỗi: ${result.error || result.message || 'Không xác định'}\n\n` +
+                  `Vui lòng thử lại hoặc liên hệ quán để được hỗ trợ.`,
+                  [
+                    { text: 'Thử lại', onPress: () => confirmPaymentManually() },
+                    { text: 'Hủy', style: 'cancel' }
+                  ]
+                );
               }
             } catch (error) {
-              console.error('Error confirming payment:', error);
+              console.error('❌ Lỗi kết nối khi xác nhận thanh toán:', error);
               setCheckingPayment(false);
               setPaymentStatus('pending');
-              Alert.alert('Lỗi', '❌ Lỗi kết nối khi gửi yêu cầu');
+              Alert.alert(
+                '❌ LỖI KẾT NỐI',
+                `Không thể kết nối đến server.\n\n` +
+                `Lỗi: ${error.message || 'Kết nối bị gián đoạn'}\n\n` +
+                `Vui lòng kiểm tra kết nối internet và thử lại.`,
+                [
+                  { text: 'Thử lại', onPress: () => confirmPaymentManually() },
+                  { text: 'Hủy', style: 'cancel' }
+                ]
+              );
             }
           }
         }
@@ -406,6 +466,45 @@ export default function DepositPaymentScreen() {
                 </View>
                 
 
+                {/* Thông tin chuyển khoản */}
+                <View style={styles.bankInfoContainer}>
+                  <ThemedText type="defaultSemiBold" style={styles.bankInfoTitle}>
+                    🏦 THÔNG TIN CHUYỂN KHOẢN
+                  </ThemedText>
+                  <View style={styles.bankInfoRow}>
+                    <ThemedText style={styles.bankInfoLabel}>Tên TK:</ThemedText>
+                    <ThemedText style={styles.bankInfoValue}>DANG GIA HY</ThemedText>
+                  </View>
+                  <View style={styles.bankInfoRow}>
+                    <ThemedText style={styles.bankInfoLabel}>Số TK:</ThemedText>
+                    <ThemedText style={styles.bankInfoValue}>2246811357</ThemedText>
+                  </View>
+                  <View style={styles.bankInfoRow}>
+                    <ThemedText style={styles.bankInfoLabel}>Ngân hàng:</ThemedText>
+                    <ThemedText style={styles.bankInfoValue}>Techcombank (970407)</ThemedText>
+                  </View>
+                  <View style={styles.bankInfoRow}>
+                    <ThemedText style={styles.bankInfoLabel}>Số tiền:</ThemedText>
+                    <ThemedText style={[styles.bankInfoValue, styles.amountHighlight]}>
+                      {paymentInfo.amount.toLocaleString('vi-VN')} VND
+                    </ThemedText>
+                  </View>
+                  <View style={styles.bankInfoRow}>
+                    <ThemedText style={styles.bankInfoLabel}>Nội dung:</ThemedText>
+                    <ThemedText style={styles.bankInfoValue}>Coc ban {params.tableName}</ThemedText>
+                  </View>
+                  
+                  {/* Thông báo về VietQR */}
+                  <View style={styles.vietqrNotice}>
+                    <ThemedText style={styles.vietqrNoticeText}>
+                      💡 QR code sử dụng VietQR - chuẩn quốc gia Việt Nam
+                    </ThemedText>
+                    <ThemedText style={styles.vietqrNoticeSubText}>
+                      Tương thích với tất cả app ngân hàng Việt Nam
+                    </ThemedText>
+                  </View>
+                </View>
+
                 {/* Hướng dẫn thanh toán */}
                 <View style={styles.instructionContainer}>
                   <ThemedText type="defaultSemiBold" style={styles.instructionTitle}>
@@ -413,9 +512,10 @@ export default function DepositPaymentScreen() {
                   </ThemedText>
                   <ThemedText style={styles.instructionText}>
                     1. Quét QR code bằng app ngân hàng{'\n'}
-                    2. Chuyển khoản đúng số tiền: {paymentInfo.amount.toLocaleString('vi-VN')}đ{'\n'}
-                    3. Nhấn "ĐÃ THANH TOÁN - XÁC NHẬN NGAY"{'\n'}
-                    4. Admin sẽ kiểm tra và xác nhận trong vài phút
+                    2. Hoặc chuyển khoản thủ công theo thông tin trên{'\n'}
+                    3. Chuyển đúng số tiền: {paymentInfo.amount.toLocaleString('vi-VN')}đ{'\n'}
+                    4. Nhấn "ĐÃ THANH TOÁN - XÁC NHẬN NGAY"{'\n'}
+                    5. Admin sẽ kiểm tra và xác nhận trong vài phút
                   </ThemedText>
                 </View>
 
@@ -634,6 +734,64 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 8,
     textAlign: 'center',
+  },
+  bankInfoContainer: {
+    backgroundColor: '#f8fafc',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  bankInfoTitle: {
+    fontSize: 16,
+    color: '#1e293b',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  bankInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  bankInfoLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  bankInfoValue: {
+    fontSize: 14,
+    color: '#1e293b',
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+  },
+  amountHighlight: {
+    color: '#dc2626',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  vietqrNotice: {
+    backgroundColor: '#fef3c7',
+    padding: 10,
+    borderRadius: 6,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  vietqrNoticeText: {
+    fontSize: 12,
+    color: '#92400e',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  vietqrNoticeSubText: {
+    fontSize: 11,
+    color: '#a16207',
+    textAlign: 'center',
+    marginTop: 2,
   },
   instructionContainer: {
     backgroundColor: '#f0f9ff',

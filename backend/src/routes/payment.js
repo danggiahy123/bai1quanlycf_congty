@@ -68,8 +68,21 @@ router.post('/generate-qr', async (req, res) => {
       });
     }
 
-    // Tạo QR code URL (sử dụng VietQR API)
-    const qrCodeUrl = `https://img.vietqr.io/image/${bankCode}-${accountNumber}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(description)}`;
+    // Tạo QR code sử dụng VietQR API với cú pháp đúng
+    const qrData = {
+      accountNumber,
+      accountName,
+      bankCode,
+      amount: parseInt(amount),
+      description
+    };
+    
+    // Sử dụng VietQR API với cú pháp đúng
+    // https://img.vietqr.io/image/<BANK_ID>-<ACCOUNT_NO>-<TEMPLATE>.png?amount=<AMOUNT>&addInfo=<DESCRIPTION>&accountName=<ACCOUNT_NAME>
+    const qrCodeUrl = `https://img.vietqr.io/image/${bankCode}-${accountNumber}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(description)}&accountName=${encodeURIComponent(accountName)}`;
+
+    console.log('🔗 Tạo VietQR với thông tin:', qrData);
+    console.log('🔗 VietQR URL:', qrCodeUrl);
 
     res.json({
       success: true,
@@ -78,7 +91,7 @@ router.post('/generate-qr', async (req, res) => {
         accountNumber,
         accountName,
         bankCode,
-        amount,
+        amount: parseInt(amount),
         description
       }
     });
@@ -119,11 +132,14 @@ router.post('/check-payment', async (req, res) => {
     console.log('❌ Chỉ admin mới có thể xác nhận thanh toán thủ công');
     
     return res.json({
-      success: false,
-      message: 'Hệ thống không thể tự động kiểm tra thanh toán ngân hàng. Vui lòng chuyển khoản và liên hệ quán để xác nhận.',
+      success: true,
+      message: 'CHƯA NHẬN TIỀN - Vui lòng chuyển khoản và nhấn "ĐÃ THANH TOÁN" để xác nhận',
       data: {
-        status: 'pending',
-        message: 'CHƯA CÓ THANH TOÁN - CẦN XÁC NHẬN THỦ CÔNG'
+        isPaid: false,
+        status: 'not_paid',
+        bookingId: bookingId,
+        amount: amount,
+        transactionType: transactionType
       }
     });
 
@@ -214,16 +230,37 @@ router.post('/confirm-payment', async (req, res) => {
       console.log('✅ Đã lưu giao dịch thanh toán, chờ admin xác nhận');
     }
 
+    // Gửi thông báo cho khách hàng khi thanh toán cọc thành công
+    if (transactionType === 'deposit' && booking.customer) {
+      try {
+        const customerNotification = new Notification({
+          user: booking.customer,
+          type: 'deposit_confirmed',
+          title: '✅ ĐÃ CỌC THÀNH CÔNG, ĐANG ĐỢI QUÁN XÁC NHẬN',
+          message: `Bạn đã thanh toán cọc ${amount.toLocaleString()}đ thành công cho bàn ${booking.table}. Quán sẽ xác nhận trong vài phút.`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await customerNotification.save();
+        console.log('✅ Đã gửi thông báo "ĐÃ CỌC THÀNH CÔNG" cho khách hàng');
+      } catch (notificationError) {
+        console.error('Lỗi gửi thông báo cho khách hàng:', notificationError);
+      }
+    }
+
     // KHÔNG gửi thông báo Socket.IO cho webadmin ở đây
     // Thông báo sẽ được gửi khi admin thực sự xác nhận cọc
     console.log('✅ Đã lưu giao dịch, chờ admin xác nhận để gửi thông báo webadmin');
 
     res.json({
       success: true,
-      message: 'Đã xác nhận thanh toán thành công',
+      message: '✅ THÀNH CÔNG - Đơn cọc bàn đang đợi admin phê duyệt',
       data: {
         transactionId: transaction._id,
-        status: 'completed'
+        status: 'completed',
+        bookingId: bookingId,
+        amount: amount
       }
     });
   } catch (error) {
