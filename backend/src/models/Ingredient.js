@@ -19,7 +19,7 @@ const ingredientSchema = new mongoose.Schema({
   unit: {
     type: String,
     required: true,
-    enum: ['kg', 'g', 'l', 'ml', 'pcs', 'box', 'bag', 'bottle', 'can']
+    enum: ['kg', 'g', 'l', 'ml', 'pcs', 'box', 'bag', 'bottle', 'can', 'con']
   },
   unitPrice: {
     type: Number,

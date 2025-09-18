@@ -24,7 +24,7 @@ export const useSocket = (): UseSocketReturn => {
       
       // Initialize socket connection
       const newSocket = io(API, {
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'],
         timeout: 20000,
         autoConnect: true,
       });

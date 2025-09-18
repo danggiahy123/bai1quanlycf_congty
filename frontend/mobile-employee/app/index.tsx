@@ -3,40 +3,44 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { tryApiCall } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
-interface Booking {
-  _id: string;
-  customer: {
-    fullName: string;
-    phone: string;
-  };
-  table: {
-    name: string;
-  };
-  numberOfGuests: number;
-  bookingDate: string;
-  bookingTime: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  totalAmount: number;
-  createdAt: string;
+const { width } = Dimensions.get('window');
+
+interface DashboardStats {
+  totalBookings: number;
+  pendingBookings: number;
+  confirmedBookings: number;
+  totalRevenue: number;
+  occupiedTables: number;
+  emptyTables: number;
 }
 
-export default function BookingsScreen() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
+export default function HomeScreen() {
+  const router = useRouter();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalBookings: 0,
+    pendingBookings: 0,
+    confirmedBookings: 0,
+    totalRevenue: 0,
+    occupiedTables: 0,
+    emptyTables: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
+  const [userInfo, setUserInfo] = useState<any>(null);
 
-  const loadBookings = async () => {
+  const loadDashboardData = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
@@ -46,340 +50,426 @@ export default function BookingsScreen() {
         return;
       }
 
-      const result = await tryApiCall('/api/bookings/employee', {
+      // Load user info
+      const userData = await AsyncStorage.getItem('userInfo');
+      if (userData) {
+        setUserInfo(JSON.parse(userData));
+      }
+
+      // Load bookings stats
+      const bookingsResult = await tryApiCall('/api/bookings/employee', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (result.success) {
-        setBookings(result.data.bookings || []);
-      } else {
-        throw new Error(result.error || 'Không thể tải dữ liệu');
+      // Load tables stats
+      const tablesResult = await tryApiCall('/api/tables', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (bookingsResult.success && tablesResult.success) {
+        const bookings = bookingsResult.data.bookings || [];
+        const tables = tablesResult.data || [];
+        
+        const totalRevenue = bookings
+          .filter(b => b.status === 'confirmed')
+          .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+
+        setStats({
+          totalBookings: bookings.length,
+          pendingBookings: bookings.filter(b => b.status === 'pending').length,
+          confirmedBookings: bookings.filter(b => b.status === 'confirmed').length,
+          totalRevenue,
+          occupiedTables: tables.filter(t => t.status === 'occupied').length,
+          emptyTables: tables.filter(t => t.status === 'empty').length,
+        });
       }
     } catch (error) {
-      console.error('Error loading bookings:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách đặt bàn');
-      setBookings([]);
+      console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const confirmBooking = async (bookingId: string) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${bookingId}/confirm`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (result.success) {
-        Alert.alert('Thành công', 'Đã xác nhận đặt bàn');
-        loadBookings();
-      } else {
-        Alert.alert('Lỗi', result.error || 'Không thể xác nhận đặt bàn');
-      }
-    } catch (error) {
-      console.error('Error confirming booking:', error);
-      Alert.alert('Lỗi', 'Không thể xác nhận đặt bàn');
-    }
-  };
-
-  const cancelBooking = async (bookingId: string) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${bookingId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (result.success) {
-        Alert.alert('Thành công', 'Đã hủy đặt bàn');
-        loadBookings();
-      } else {
-        Alert.alert('Lỗi', result.error || 'Không thể hủy đặt bàn');
-      }
-    } catch (error) {
-      console.error('Error cancelling booking:', error);
-      Alert.alert('Lỗi', 'Không thể hủy đặt bàn');
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return Colors.light.warning;
-      case 'confirmed': return Colors.light.success;
-      case 'cancelled': return Colors.light.error;
-      default: return Colors.light.icon;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Chờ xác nhận';
-      case 'confirmed': return 'Đã xác nhận';
-      case 'cancelled': return 'Đã hủy';
-      default: return status;
-    }
-  };
-
-  const filteredBookings = bookings.filter(booking => {
-    if (filter === 'all') return true;
-    return booking.status === filter;
-  });
-
-  const renderBooking = ({ item }: { item: Booking }) => (
-    <View style={styles.bookingCard}>
-      <View style={styles.bookingHeader}>
-        <Text style={styles.customerName}>{item.customer.fullName}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.bookingInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="restaurant" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>Bàn: {item.table.name}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="people" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>{item.numberOfGuests} người</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="calendar" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>
-            {new Date(item.bookingDate).toLocaleDateString('vi-VN')} {item.bookingTime}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="call" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>{item.customer.phone}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="cash" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>{item.totalAmount.toLocaleString()}đ</Text>
-        </View>
-      </View>
-
-      {item.status === 'pending' && (
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.confirmButton]}
-            onPress={() => confirmBooking(item._id)}
-          >
-            <Ionicons name="checkmark" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Xác nhận</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.cancelButton]}
-            onPress={() => cancelBooking(item._id)}
-          >
-            <Ionicons name="close" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Hủy</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
   useEffect(() => {
-    loadBookings();
+    loadDashboardData();
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadBookings();
+    loadDashboardData();
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {['all', 'pending', 'confirmed', 'cancelled'].map((filterType) => (
-          <TouchableOpacity
-            key={filterType}
-            style={[
-              styles.filterButton,
-              filter === filterType && styles.activeFilterButton
-            ]}
-            onPress={() => setFilter(filterType as any)}
-          >
-            <Text style={[
-              styles.filterText,
-              filter === filterType && styles.activeFilterText
-            ]}>
-              {filterType === 'all' ? 'Tất cả' : 
-               filterType === 'pending' ? 'Chờ xác nhận' :
-               filterType === 'confirmed' ? 'Đã xác nhận' : 'Đã hủy'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+  const quickActions = [
+    {
+      title: 'Đặt bàn cho khách',
+      subtitle: 'Tạo booking cho khách hàng',
+      icon: 'restaurant',
+      color: '#FF6B6B',
+      onPress: () => router.push('/bookings'),
+    },
+    {
+      title: 'Duyệt bàn cho khách',
+      subtitle: 'Xác nhận và quản lý đặt bàn',
+      icon: 'checkmark-circle',
+      color: '#4ECDC4',
+      onPress: () => router.push('/bookings'),
+    },
+    {
+      title: 'Thanh toán bàn',
+      subtitle: 'Xử lý thanh toán cho các bàn',
+      icon: 'card',
+      color: '#45B7D1',
+      onPress: () => router.push('/payments'),
+    },
+    {
+      title: 'Order thêm món',
+      subtitle: 'Thêm món ăn cho khách',
+      icon: 'add-circle',
+      color: '#96CEB4',
+      onPress: () => router.push('/order'),
+    },
+  ];
 
-      {/* Statistics */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{bookings.filter(b => b.status === 'pending').length}</Text>
-          <Text style={styles.statLabel}>Chờ xác nhận</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{bookings.filter(b => b.status === 'confirmed').length}</Text>
-          <Text style={styles.statLabel}>Đã xác nhận</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>
-            {bookings.reduce((sum, b) => sum + b.totalAmount, 0).toLocaleString()}đ
-          </Text>
-          <Text style={styles.statLabel}>Tổng doanh thu</Text>
-        </View>
+  const StatCard = ({ title, value, icon, color, subtitle }: any) => (
+    <View style={[styles.statCard, { borderLeftColor: color }]}>
+      <View style={styles.statHeader}>
+        <Ionicons name={icon} size={20} color={color} />
+        <Text style={styles.statTitle}>{title}</Text>
       </View>
-
-      {/* Bookings List */}
-      <FlatList
-        data={filteredBookings}
-        renderItem={renderBooking}
-        keyExtractor={(item) => item._id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
+      <Text style={styles.statValue}>{value}</Text>
+      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
     </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="restaurant" size={64} color={Colors.light.primary} />
+        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Welcome Header */}
+      <View style={styles.welcomeHeader}>
+        <View>
+          <Text style={styles.welcomeText}>Xin chào!</Text>
+          <Text style={styles.userName}>{userInfo?.fullName || 'Nhân viên'}</Text>
+          <Text style={styles.userRole}>Nhân viên nhà hàng</Text>
+        </View>
+        <View style={styles.avatar}>
+          <Ionicons name="person" size={24} color="#fff" />
+        </View>
+      </View>
+
+      {/* Quick Stats */}
+      <View style={styles.statsGrid}>
+        <StatCard
+          title="Đặt bàn chờ"
+          value={stats.pendingBookings}
+          icon="time"
+          color={Colors.light.warning}
+        />
+        <StatCard
+          title="Đã xác nhận"
+          value={stats.confirmedBookings}
+          icon="checkmark-circle"
+          color={Colors.light.success}
+        />
+        <StatCard
+          title="Bàn trống"
+          value={stats.emptyTables}
+          icon="restaurant-outline"
+          color={Colors.light.primary}
+        />
+        <StatCard
+          title="Bàn đang dùng"
+          value={stats.occupiedTables}
+          icon="people"
+          color={Colors.light.error}
+        />
+      </View>
+
+      {/* Revenue Card */}
+      <View style={styles.revenueCard}>
+        <View style={styles.revenueHeader}>
+          <Ionicons name="trending-up" size={24} color={Colors.light.success} />
+          <Text style={styles.revenueTitle}>Doanh thu hôm nay</Text>
+        </View>
+        <Text style={styles.revenueAmount}>
+          {stats.totalRevenue.toLocaleString()}đ
+        </Text>
+        <Text style={styles.revenueSubtitle}>
+          Từ {stats.confirmedBookings} đặt bàn đã xác nhận
+        </Text>
+      </View>
+
+      {/* Quick Actions */}
+      <View style={styles.quickActionsSection}>
+        <Text style={styles.sectionTitle}>Quản lý nhà hàng</Text>
+        <View style={styles.quickActionsGrid}>
+          {quickActions.map((action, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[styles.quickActionCard, { borderLeftColor: action.color, borderLeftWidth: 4 }]}
+              onPress={action.onPress}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
+                <Ionicons name={action.icon as any} size={24} color="#fff" />
+              </View>
+              <Text style={styles.quickActionTitle}>{action.title}</Text>
+              <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
+              <Ionicons name="chevron-forward" size={16} color={Colors.light.textSecondary} style={styles.arrowIcon} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Recent Activity */}
+      <View style={styles.recentActivitySection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
+          <TouchableOpacity onPress={() => router.push('/notifications')}>
+            <Text style={styles.seeAllText}>Xem tất cả</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.activityCard}>
+          <Ionicons name="notifications" size={20} color={Colors.light.primary} />
+          <View style={styles.activityContent}>
+            <Text style={styles.activityTitle}>Hệ thống đã sẵn sàng</Text>
+            <Text style={styles.activityTime}>Vừa xong</Text>
+          </View>
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.light.backgroundSecondary,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  activeFilterButton: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: Colors.light.icon,
-  },
-  activeFilterText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: Colors.light.backgroundSecondary,
   },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.light.primary,
-    marginBottom: 4,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.light.textSecondary,
   },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.light.icon,
-    textAlign: 'center',
-  },
-  listContainer: {
-    padding: 16,
-  },
-  bookingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  bookingHeader: {
+  welcomeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    padding: 20,
+    backgroundColor: Colors.light.primary,
   },
-  customerName: {
-    fontSize: 18,
+  welcomeText: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.9,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 4,
+  },
+  userRole: {
+    fontSize: 14,
+    color: '#fff',
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 12,
+  },
+  statCard: {
+    width: (width - 44) / 2,
+    backgroundColor: Colors.light.card,
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statTitle: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: Colors.light.text,
+    marginBottom: 4,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
+  statSubtitle: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+    color: Colors.light.textSecondary,
   },
-  bookingInfo: {
-    gap: 8,
+  revenueCard: {
+    margin: 16,
+    backgroundColor: Colors.light.card,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  infoRow: {
+  revenueHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 12,
   },
-  infoText: {
-    fontSize: 14,
+  revenueTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.light.text,
+    marginLeft: 8,
   },
-  actionButtons: {
+  revenueAmount: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: Colors.light.success,
+    marginBottom: 4,
+  },
+  revenueSubtitle: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+  },
+  quickActionsSection: {
+    padding: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    marginBottom: 16,
+  },
+  quickActionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
-    marginTop: 16,
   },
-  actionButton: {
-    flex: 1,
+  quickActionCard: {
+    width: (width - 44) / 2,
+    backgroundColor: Colors.light.card,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
+    position: 'relative',
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  quickActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  quickActionSubtitle: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+  },
+  arrowIcon: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    marginTop: -8,
+  },
+  recentActivitySection: {
+    padding: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: Colors.light.primary,
+    fontWeight: '500',
+  },
+  activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
+    backgroundColor: Colors.light.card,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: Colors.light.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  confirmButton: {
-    backgroundColor: Colors.light.success,
+  activityContent: {
+    marginLeft: 12,
+    flex: 1,
   },
-  cancelButton: {
-    backgroundColor: Colors.light.error,
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.light.text,
+    marginBottom: 4,
   },
-  actionButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+  activityTime: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
   },
 });

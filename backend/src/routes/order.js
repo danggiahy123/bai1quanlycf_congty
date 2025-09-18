@@ -53,20 +53,20 @@ router.post('/by-table/:tableId', async (req, res) => {
       });
     }
 
-    await Table.findByIdAndUpdate(tableId, { status: 'ĐÃ ĐƯỢC ĐẶT' });
+    await Table.findByIdAndUpdate(tableId, { status: 'occupied' });
     
-    // Emit Socket.IO event for new order
-    const io = req.app.get('io');
-    if (io) {
-      io.to('employees').emit('order_status_changed', {
-        orderId: order._id,
-        tableId: tableId,
-        status: 'pending',
-        items: order.items,
-        inventoryDeducted: deductResult.results,
-        timestamp: new Date()
-      });
-    }
+    // TẠM THỜI ẨN: Emit Socket.IO event for new order
+    // const io = req.app.get('io');
+    // if (io) {
+    //   io.emit('order_status_changed', {
+    //     orderId: order._id,
+    //     tableId: tableId,
+    //     status: 'pending',
+    //     items: order.items,
+    //     inventoryDeducted: deductResult.results,
+    //     timestamp: new Date()
+    //   });
+    // }
     
     res.json({
       ...order.toObject(),
@@ -106,46 +106,46 @@ router.post('/by-table/:tableId/pay', async (req, res) => {
     await booking.save();
 
     // Free the table
-    const table = await Table.findByIdAndUpdate(tableId, { status: 'TRỐNG' }, { new: true });
+    const table = await Table.findByIdAndUpdate(tableId, { status: 'empty' }, { new: true });
 
     // Emit Socket.IO events for real-time updates
     const io = req.app.get('io');
     const totalAmount = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
     if (io) {
-      // Emit table status change
-      io.emit('table_status_changed', {
-        tableId: table._id,
-        tableName: table.name,
-        status: 'empty',
-        bookingId: booking._id,
-        customerName: booking.customerInfo?.fullName || 'N/A',
-        timestamp: new Date()
-      });
+      // TẠM THỜI ẨN: Emit table status change
+      // io.emit('table_status_changed', {
+      //   tableId: table._id,
+      //   tableName: table.name,
+      //   status: 'empty',
+      //   bookingId: booking._id,
+      //   customerName: booking.customerInfo?.fullName || 'N/A',
+      //   timestamp: new Date()
+      // });
 
-      // Emit order status change
-      io.to('employees').emit('order_status_changed', {
-        orderId: order._id,
-        tableId: tableId,
-        tableName: table.name,
-        status: 'paid',
-        totalAmount: totalAmount,
-        customerId: booking.customer?._id,
-        customerName: booking.customerInfo?.fullName || 'N/A',
-        timestamp: new Date()
-      });
+      // TẠM THỜI ẨN: Emit order status change
+      // io.emit('order_status_changed', {
+      //   orderId: order._id,
+      //   tableId: tableId,
+      //   tableName: table.name,
+      //   status: 'paid',
+      //   totalAmount: totalAmount,
+      //   customerId: booking.customer?._id,
+      //   customerName: booking.customerInfo?.fullName || 'N/A',
+      //   timestamp: new Date()
+      // });
 
-      // Emit payment status change
-      io.emit('payment_status_changed', {
-        orderId: order._id,
-        tableId: tableId,
-        tableName: table.name,
-        amount: totalAmount,
-        status: 'completed',
-        customerId: booking.customer?._id,
-        customerName: booking.customerInfo?.fullName || 'N/A',
-        timestamp: new Date()
-      });
+      // TẠM THỜI ẨN: Emit payment status change
+      // io.emit('payment_status_changed', {
+      //   orderId: order._id,
+      //   tableId: tableId,
+      //   tableName: table.name,
+      //   amount: totalAmount,
+      //   status: 'completed',
+      //   customerId: booking.customer?._id,
+      //   customerName: booking.customerInfo?.fullName || 'N/A',
+      //   timestamp: new Date()
+      // });
     }
 
     // Log table history for payment
@@ -200,18 +200,18 @@ router.post('/by-table/:tableId/cancel', async (req, res) => {
     // Cập nhật trạng thái bàn
     await Table.findByIdAndUpdate(tableId, { status: 'TRỐNG' });
 
-    // Emit Socket.IO event
-    const io = req.app.get('io');
-    if (io) {
-      io.to('employees').emit('order_status_changed', {
-        orderId: order._id,
-        tableId: tableId,
-        status: 'cancelled',
-        items: order.items,
-        inventoryReturned: returnResult.results,
-        timestamp: new Date()
-      });
-    }
+    // TẠM THỜI ẨN: Emit Socket.IO event
+    // const io = req.app.get('io');
+    // if (io) {
+    //   io.to('employees').emit('order_status_changed', {
+    //     orderId: order._id,
+    //     tableId: tableId,
+    //     status: 'cancelled',
+    //     items: order.items,
+    //     inventoryReturned: returnResult.results,
+    //     timestamp: new Date()
+    //   });
+    // }
 
     res.json({
       message: 'Order đã được hủy',

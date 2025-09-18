@@ -167,41 +167,34 @@ export default function PaymentScreen() {
     }
   }, [params.bookingId, params.depositAmount, selectedBank]);
 
-  // Xác nhận thanh toán cọc
+  // Xác nhận thanh toán cọc - CHỈ DÀNH CHO ADMIN
   const confirmPayment = async () => {
-    if (!params.bookingId) {
-      Alert.alert('Lỗi', 'Không có thông tin booking');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const result = await tryApiCall(`/api/bookings/${params.bookingId}/confirm-deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (result.success) {
-        // Chuyển đến màn hình thành công
-        router.replace({
-          pathname: '/booking-success',
-          params: {
-            bookingId: params.bookingId,
-            tableName: params.tableName,
-            depositAmount: params.depositAmount
+    Alert.alert(
+      '⚠️ CẢNH BÁO',
+      'Màn hình này đã được thay thế bằng màn hình thanh toán cọc mới.\n\n' +
+      'Vui lòng sử dụng màn hình thanh toán cọc để:\n' +
+      '• Kiểm tra giao dịch thật\n' +
+      '• Bảo mật cao hơn\n' +
+      '• Trải nghiệm tốt hơn\n\n' +
+      'Chuyển đến màn hình thanh toán cọc mới?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Chuyển đến màn hình mới', 
+          onPress: () => {
+            router.replace({
+              pathname: '/deposit-payment',
+              params: {
+                bookingId: params.bookingId,
+                tableId: params.tableId,
+                depositAmount: params.depositAmount,
+                tableName: params.tableName
+              }
+            });
           }
-        });
-      } else {
-        Alert.alert('Lỗi', result.error || 'Xác nhận thanh toán thất bại');
-      }
-    } catch (error) {
-      console.error('Error confirming payment:', error);
-      Alert.alert('Lỗi', 'Lỗi kết nối khi xác nhận thanh toán');
-    } finally {
-      setLoading(false);
-    }
+        }
+      ]
+    );
   };
 
   const screenWidth = Dimensions.get('window').width;
@@ -317,10 +310,7 @@ export default function PaymentScreen() {
               resizeMode="contain"
             />
               <Text style={styles.qrText}>
-                Quét mã QR để chuyển tiền đến {paymentInfo.accountName}
-              </Text>
-              <Text style={styles.qrSubtext}>
-                {selectedBank?.name} - {paymentInfo.accountNumber}
+                Quét mã QR để thanh toán
               </Text>
               {paymentInfo.amount && (
                 <Text style={styles.amountText}>

@@ -1,15 +1,15 @@
 // API Configuration
 export const FALLBACK_URLS = [
+  'http://192.168.5.162:5000', // New IP address
   'http://localhost:5000', // Local development
   'http://127.0.0.1:5000', // Local development alternative
-  'http://10.0.2.2:5000', // Android emulator
-  'http://192.168.1.6:5000' // IP address fallback
+  'http://10.0.2.2:5000' // Android emulator
 ];
 
-export const DEFAULT_API_URL = 'http://localhost:5000';
+export const DEFAULT_API_URL = 'http://192.168.5.162:5000';
 
 // Function to try API calls with fallback
-export const tryApiCall = async (endpoint: string, options: RequestInit) => {
+export const tryApiCall = async (endpoint: string, options: RequestInit = {}) => {
   for (const url of FALLBACK_URLS) {
     try {
       console.log(`Trying to connect to: ${url}${endpoint}`);
@@ -28,9 +28,11 @@ export const tryApiCall = async (endpoint: string, options: RequestInit) => {
       } else {
         const errorData = await response.json();
         console.log(`Error from ${url}:`, errorData);
+        return { success: false, error: errorData.message || `HTTP ${response.status}` };
       }
     } catch (error) {
       console.log(`Connection failed to ${url}:`, error.message);
+      // Continue to next URL
     }
   }
   return { success: false, error: 'Không thể kết nối đến server' };

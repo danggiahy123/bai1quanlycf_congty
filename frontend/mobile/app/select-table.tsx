@@ -149,41 +149,6 @@ export default function SelectTableScreen() {
     };
   }, [socket]);
 
-  // Helper functions
-  const getLocationIcon = (location: string) => {
-    switch (location) {
-      case 'window': return 'sunny';
-      case 'air_conditioned': return 'snow';
-      case 'outdoor': return 'leaf';
-      case 'private_room': return 'lock-closed';
-      case 'main_hall': return 'people';
-      default: return 'restaurant';
-    }
-  };
-
-  const getLocationText = (location: string) => {
-    switch (location) {
-      case 'window': return 'Cửa sổ';
-      case 'air_conditioned': return 'Máy lạnh';
-      case 'outdoor': return 'Ngoài trời';
-      case 'private_room': return 'Phòng riêng';
-      case 'main_hall': return 'Sảnh chính';
-      default: return 'Thường';
-    }
-  };
-
-  const getFeatureIcon = (feature: string) => {
-    switch (feature) {
-      case 'wifi': return 'wifi';
-      case 'power_outlet': return 'flash';
-      case 'quiet': return 'volume-mute';
-      case 'romantic': return 'heart';
-      case 'business': return 'briefcase';
-      case 'family_friendly': return 'people';
-      case 'wheelchair_accessible': return 'accessibility';
-      default: return 'checkmark';
-    }
-  };
 
   const select = async (id: string) => {
     const table = tables.find(t => t.id === id);
@@ -250,9 +215,7 @@ export default function SelectTableScreen() {
                 style={[
                   styles.table, 
                   occupied && styles.busy,
-                  isSelected && styles.selected,
-                  !isCapacitySuitable && styles.capacityWarning,
-                  t.isPremium && styles.premiumTable
+                  isSelected && styles.selected
                 ]} 
                 onPress={() => {
                   if (occupied) {
@@ -268,64 +231,17 @@ export default function SelectTableScreen() {
                 }}
               >
                 <View style={styles.tableContent}>
-                  {/* Header với tên bàn và VIP badge */}
-                  <View style={styles.tableHeader}>
-                    <ThemedText type="defaultSemiBold" style={styles.tableName}>{t.name}</ThemedText>
-                    {t.isPremium && (
-                      <View style={styles.vipBadge}>
-                        <Ionicons name="star" size={12} color="#FFD700" />
-                        <ThemedText style={styles.vipText}>VIP</ThemedText>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Thông tin cơ bản */}
-                  <View style={styles.tableInfo}>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="people" size={14} color="#6b7280" />
-                      <ThemedText style={styles.infoText}>{t.capacity} người</ThemedText>
-                    </View>
-                    
-                    <View style={styles.infoRow}>
-                      <Ionicons name={getLocationIcon(t.location || 'main_hall')} size={14} color="#6b7280" />
-                      <ThemedText style={styles.infoText}>{getLocationText(t.location || 'main_hall')}</ThemedText>
-                    </View>
-
-                    {t.price > 0 && (
-                      <View style={styles.infoRow}>
-                        <Ionicons name="card" size={14} color="#6b7280" />
-                        <ThemedText style={styles.infoText}>{t.price.toLocaleString()}đ</ThemedText>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Features */}
-                  {t.features && t.features.length > 0 && (
-                    <View style={styles.featuresContainer}>
-                      {t.features.slice(0, 3).map((feature, index) => (
-                        <View key={index} style={styles.featureTag}>
-                          <Ionicons name={getFeatureIcon(feature)} size={10} color="#16a34a" />
-                        </View>
-                      ))}
-                      {t.features.length > 3 && (
-                        <ThemedText style={styles.moreFeaturesText}>+{t.features.length - 3}</ThemedText>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Status */}
-                  <ThemedText style={[styles.tableStatus, occupied && styles.occupiedText]}>
-                    {occupied ? 'Bàn đã đặt' : 'Trống'}
+                  <ThemedText style={styles.tableName}>
+                    {t.name}
                   </ThemedText>
-
-                  {/* Warnings */}
-                  {!isCapacitySuitable && !occupied && (
-                    <ThemedText style={styles.warningText}>⚠️ Quá đông</ThemedText>
-                  )}
+                  
+                  <ThemedText style={[styles.tableStatus, occupied && styles.occupiedText]}>
+                    {occupied ? 'BÀN ĐÃ ĐẶT' : 'TRỐNG'}
+                  </ThemedText>
 
                   {occupied && (
                     <ThemedText style={styles.tableAction}>
-                      {t.occupiedBy === userInfo?.id ? 'XEM LẠI BILL' : 'BÀN ĐÃ ĐẶT'}
+                      {t.occupiedBy === userInfo?.id ? 'XEM BILL' : 'ĐÃ ĐẶT'}
                     </ThemedText>
                   )}
                   {isSelected && !occupied && (
@@ -352,25 +268,25 @@ export default function SelectTableScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f5f5f5',
   },
   header: {
     padding: 20,
-    paddingBottom: 10,
+    paddingBottom: 15,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomWidth: 2,
+    borderBottomColor: '#e0e0e0',
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   guestsText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
   connectionStatus: {
     flexDirection: 'row',
@@ -384,156 +300,89 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#666',
   },
   selectedTableText: {
     fontSize: 14,
     color: '#16a34a',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 100, // Space for footer button
+    padding: 15,
+    paddingBottom: 100,
   },
   grid: { 
     flexDirection: 'row', 
     flexWrap: 'wrap', 
-    gap: 12, 
+    gap: 15, 
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
   },
   table: { 
-    width: '48%', 
-    minHeight: 160,
-    maxHeight: 200,
+    width: '47%', 
+    height: 140,
     backgroundColor: '#fff',
     borderWidth: 2, 
     borderColor: '#16a34a', 
-    borderRadius: 16, 
-    padding: 10, 
+    borderRadius: 8, 
+    padding: 12, 
     alignItems: 'center', 
-    justifyContent: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    justifyContent: 'center',
   },
   selected: {
-    borderColor: '#059669',
+    borderColor: '#16a34a',
     backgroundColor: '#f0fdf4',
     borderWidth: 3,
   },
+  busy: {
+    borderColor: '#16a34a',
+    backgroundColor: '#fef2f2',
+    opacity: 0.6,
+  },
   tableContent: {
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     flex: 1,
     width: '100%',
-    minHeight: 140,
   },
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 6,
-  },
-  vipBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    gap: 2,
-  },
-  vipText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  tableInfo: {
-    width: '100%',
-    marginBottom: 6,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 1,
-  },
-  infoText: {
-    fontSize: 11,
-    color: '#6b7280',
-    flex: 1,
-    flexWrap: 'wrap',
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  featureTag: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#f0fdf4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreFeaturesText: {
-    fontSize: 10,
-    color: '#6b7280',
-    fontStyle: 'italic',
-  },
-  premiumTable: {
-    borderColor: '#FFD700',
-    backgroundColor: '#fffbf0',
-  },
-  capacityWarning: {
-    borderColor: '#f59e0b',
-    backgroundColor: '#fffbeb',
-  },
-  warningText: {
-    fontSize: 10,
-    color: '#f59e0b',
-    fontWeight: '600',
-    textAlign: 'center',
   },
   tableName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#16a34a',
-    flex: 1,
-    flexWrap: 'wrap',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   tableStatus: {
     fontSize: 12,
     color: '#16a34a',
     fontWeight: '600',
-    marginBottom: 2,
+    textAlign: 'center',
+    marginBottom: 4,
+    flexWrap: 'wrap',
   },
   occupiedText: {
-    color: '#ef4444',
+    color: '#dc2626',
   },
   tableAction: {
-    fontSize: 12,
-    color: '#ef4444',
-    fontWeight: 'bold',
+    fontSize: 10,
+    color: '#dc2626',
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: 8,
   },
   selectedText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: 'bold',
+    fontSize: 10,
+    color: '#16a34a',
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: 8,
   },
   footer: {
     position: 'absolute',
@@ -542,35 +391,19 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#fff',
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
+    borderTopWidth: 2,
+    borderTopColor: '#e0e0e0',
   },
   continueButton: {
     backgroundColor: '#16a34a',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   continueButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  fullBtn: { width: '100%' },
-  viewBillBtn: { backgroundColor: '#3b82f6', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8 },
-  busy: { 
-    backgroundColor: '#fef2f2',
-    borderColor: '#ef4444',
   },
 });
 

@@ -40,7 +40,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Thống kê doanh thu
     const totalRevenueResult = await Order.aggregate([
-      { $match: { status: 'completed' } },
+      { $match: { status: 'paid' } },
       { $group: { _id: null, total: { $sum: '$totalAmount' } } }
     ]);
     const totalRevenue = totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0;
@@ -48,7 +48,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
     const todayRevenueResult = await Order.aggregate([
       { 
         $match: { 
-          status: 'completed',
+          status: 'paid',
           createdAt: { $gte: today }
         } 
       },
@@ -107,7 +107,7 @@ router.get('/revenue', authenticateToken, async (req, res) => {
     const revenueData = await Order.aggregate([
       {
         $match: {
-          status: 'completed',
+          status: 'paid',
           createdAt: { $gte: startDate }
         }
       },
@@ -144,7 +144,7 @@ router.get('/top-items', authenticateToken, async (req, res) => {
     const { limit = 10 } = req.query;
 
     const topItems = await Order.aggregate([
-      { $match: { status: 'completed' } },
+      { $match: { status: 'paid' } },
       { $unwind: '$items' },
       {
         $group: {

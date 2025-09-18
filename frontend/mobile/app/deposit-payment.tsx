@@ -45,14 +45,26 @@ export default function DepositPaymentScreen() {
   useEffect(() => {
     loadUser();
     fetchBanks();
-    // Tự động tạo QR code ngay khi vào màn hình
-    generateQRCodeAuto();
+    // Không tự động tạo QR code ngay, chờ fetchBanks xong
   }, []);
 
   // Tự động tạo QR code với thông tin mặc định
   const generateQRCodeAuto = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Đang tạo QR code với thông tin:', paymentInfo);
+      
+      // Kiểm tra thông tin bắt buộc
+      if (!paymentInfo.accountNumber || !paymentInfo.accountName || !paymentInfo.bankCode || !paymentInfo.amount) {
+        console.error('❌ Thiếu thông tin bắt buộc:', paymentInfo);
+        // Tạo QR code trực tiếp với VietQR API
+        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+        setQrCode(directQRUrl);
+        setPaymentStatus('pending');
+        console.log('✅ Đã tạo QR code trực tiếp (thiếu thông tin):', directQRUrl);
+        return;
+      }
+      
       const result = await tryApiCall('/api/payment/generate-qr', {
         method: 'POST',
         headers: {
@@ -67,15 +79,27 @@ export default function DepositPaymentScreen() {
         })
       });
 
-      if (result.success) {
-        setQrCode(result.data.qrCode);
+      console.log('📡 Kết quả tạo QR code:', result);
+
+      if (result.success && result.data && result.data.data && result.data.data.qrCode) {
+        setQrCode(result.data.data.qrCode);
         setPaymentStatus('pending');
-        console.log('✅ QR code đã được tạo tự động');
+        console.log('✅ QR code đã được tạo tự động:', result.data.data.qrCode);
       } else {
-        console.error('❌ Lỗi tạo QR code tự động:', result.error);
+        console.error('❌ Lỗi tạo QR code tự động:', result.error || 'Unknown error');
+        // Thử tạo QR code trực tiếp với VietQR API
+        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+        setQrCode(directQRUrl);
+        setPaymentStatus('pending');
+        console.log('✅ Đã tạo QR code trực tiếp:', directQRUrl);
       }
     } catch (error) {
       console.error('Error generating QR code auto:', error);
+      // Thử tạo QR code trực tiếp với VietQR API
+      const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+      setQrCode(directQRUrl);
+      setPaymentStatus('pending');
+      console.log('✅ Đã tạo QR code trực tiếp (fallback):', directQRUrl);
     } finally {
       setLoading(false);
     }
@@ -98,24 +122,38 @@ export default function DepositPaymentScreen() {
       setLoading(true);
       const result = await tryApiCall('/api/payment/banks');
       
-      if (result.success) {
-        setBanks(result.data);
+      console.log('📡 Kết quả fetchBanks:', result);
+      
+      if (result.success && result.data && result.data.data && Array.isArray(result.data.data)) {
+        setBanks(result.data.data);
         // Tìm Techcombank
-        const techcombank = result.data.find((bank: Bank) => bank.code === 'TCB');
+        const techcombank = result.data.data.find((bank: Bank) => bank.code === 'TCB');
         if (techcombank) {
           setSelectedBank(techcombank);
           setPaymentInfo(prev => ({ ...prev, bankCode: techcombank.bin }));
-          // Auto-generate QR code
+          // Auto-generate QR code sau khi có thông tin ngân hàng
           setTimeout(() => {
-            generateQRCode();
+            generateQRCodeAuto();
+          }, 1000);
+        } else {
+          // Nếu không tìm thấy Techcombank, tạo QR code với thông tin mặc định
+          setTimeout(() => {
+            generateQRCodeAuto();
           }, 1000);
         }
       } else {
-        Alert.alert('Lỗi', result.error || 'Không thể tải danh sách ngân hàng');
+        console.error('Error fetching banks:', result.error || 'Data không hợp lệ');
+        // Vẫn tạo QR code với thông tin mặc định nếu không tải được danh sách ngân hàng
+        setTimeout(() => {
+          generateQRCodeAuto();
+        }, 1000);
       }
     } catch (error) {
       console.error('Error fetching banks:', error);
-      Alert.alert('Lỗi', 'Lỗi khi tải danh sách ngân hàng');
+      // Vẫn tạo QR code với thông tin mặc định nếu có lỗi
+      setTimeout(() => {
+        generateQRCodeAuto();
+      }, 1000);
     } finally {
       setLoading(false);
     }
@@ -123,13 +161,10 @@ export default function DepositPaymentScreen() {
 
   // Tạo QR code thanh toán cọc
   const generateQRCode = async () => {
-    if (!selectedBank) {
-      Alert.alert('Lỗi', 'Vui lòng chọn ngân hàng');
-      return;
-    }
-
     try {
       setLoading(true);
+      console.log('🔄 Đang tạo QR code với thông tin:', paymentInfo);
+      
       const result = await tryApiCall('/api/payment/generate-qr', {
         method: 'POST',
         headers: {
@@ -144,16 +179,27 @@ export default function DepositPaymentScreen() {
         })
       });
 
+      console.log('📡 Kết quả tạo QR code:', result);
+
       if (result.success) {
         setQrCode(result.data.qrCode);
         setPaymentStatus('pending');
-        Alert.alert('Thành công', 'Tạo QR code thanh toán cọc thành công!');
+        console.log('✅ QR code đã được tạo:', result.data.qrCode);
       } else {
-        Alert.alert('Lỗi', result.error || 'Không thể tạo QR code');
+        console.error('❌ Lỗi tạo QR code:', result.error);
+        // Thử tạo QR code trực tiếp với VietQR API
+        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+        setQrCode(directQRUrl);
+        setPaymentStatus('pending');
+        console.log('✅ Đã tạo QR code trực tiếp:', directQRUrl);
       }
     } catch (error) {
       console.error('Error generating QR code:', error);
-      Alert.alert('Lỗi', 'Lỗi khi tạo QR code');
+      // Thử tạo QR code trực tiếp với VietQR API
+      const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}`;
+      setQrCode(directQRUrl);
+      setPaymentStatus('pending');
+      console.log('✅ Đã tạo QR code trực tiếp (fallback):', directQRUrl);
     } finally {
       setLoading(false);
     }
@@ -179,22 +225,26 @@ export default function DepositPaymentScreen() {
         })
       });
 
-      if (result.success) {
-        // Thành công - xác nhận thanh toán cọc
-        setPaymentStatus('paid');
-        setCheckingPayment(false);
-        Alert.alert('Thành công', '✅ ĐÃ NHẬN THẤY THANH TOÁN! Bàn đã được cọc.');
-        
-        // Gọi API xác nhận thanh toán cọc
-        await confirmDepositPaymentAPI();
-        
-        setTimeout(() => {
-          router.replace('/');
-        }, 2000);
-      } else {
+      // API check-payment luôn trả về false vì không thể tự động kiểm tra ngân hàng
+      // Chúng ta sẽ chỉ tạo giao dịch khi người dùng xác nhận thủ công
+      if (result.success === false) {
+        // Hệ thống không thể tự động kiểm tra thanh toán
         setCheckingPayment(false);
         setPaymentStatus('pending');
-        Alert.alert('Thông báo', '❌ ' + (result.error || 'Chưa phát hiện thanh toán. Vui lòng thử lại sau khi chuyển khoản.'));
+        Alert.alert(
+          'Chưa phát hiện thanh toán', 
+          '❌ Hệ thống chưa phát hiện giao dịch chuyển khoản.\n\n' +
+          '📱 Vui lòng:\n' +
+          '1. Quét QR code và chuyển khoản\n' +
+          '2. Đợi 1-2 phút để giao dịch được xử lý\n' +
+          '3. Nhấn "KIỂM TRA THANH TOÁN TỰ ĐỘNG" lại\n\n' +
+          'Hoặc liên hệ quán để xác nhận thủ công.',
+          [
+            { text: 'Thử lại', onPress: () => checkPaymentAutomatically() },
+            { text: 'Liên hệ quán', onPress: () => {} },
+            { text: 'Hủy', style: 'cancel' }
+          ]
+        );
       }
     } catch (error) {
       console.error('Error checking payment:', error);
@@ -204,99 +254,74 @@ export default function DepositPaymentScreen() {
     }
   };
 
-  // Xác nhận thanh toán thủ công (admin)
+  // Xác nhận đã thanh toán - chờ admin xác nhận
   const confirmPaymentManually = async () => {
-    try {
-      setCheckingPayment(true);
-      setPaymentStatus('checking');
-      
-      Alert.alert('Thông báo', '🔧 Đang xác nhận thanh toán thủ công...');
-      
-      const result = await tryApiCall('/api/payment/confirm-payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          bookingId: params.bookingId,
-          amount: paymentInfo.amount,
-          transactionType: 'deposit'
-        })
-      });
+    Alert.alert(
+      'Xác nhận đã thanh toán',
+      '💰 Bạn đã chuyển khoản thành công?\n\n' +
+      'Nhấn "Xác nhận" để gửi yêu cầu xác nhận.\n' +
+      'Admin sẽ kiểm tra và xác nhận trong vài phút.',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { 
+          text: 'Xác nhận', 
+          onPress: async () => {
+            try {
+              setCheckingPayment(true);
+              const token = await AsyncStorage.getItem('userToken');
+              
+              if (!token) {
+                Alert.alert('Lỗi', 'Vui lòng đăng nhập lại');
+                return;
+              }
 
-      if (result.success) {
-        // Thành công - xác nhận thanh toán cọc
-        setPaymentStatus('paid');
-        setCheckingPayment(false);
-        Alert.alert('Thành công', '✅ ĐÃ XÁC NHẬN THANH TOÁN! Bàn đã được cọc.');
-        
-        // Gọi API xác nhận thanh toán cọc
-        await confirmDepositPaymentAPI();
-        
-        setTimeout(() => {
-          router.replace('/');
-        }, 2000);
-      } else {
-        setCheckingPayment(false);
-        setPaymentStatus('pending');
-        Alert.alert('Lỗi', '❌ ' + (result.error || 'Lỗi khi xác nhận thanh toán'));
-      }
-    } catch (error) {
-      console.error('Error confirming payment:', error);
-      setCheckingPayment(false);
-      setPaymentStatus('pending');
-      Alert.alert('Lỗi', '❌ Lỗi kết nối khi xác nhận thanh toán');
-    }
-  };
+              // Gọi API tạo giao dịch cọc QR code và chờ xác nhận
+              const result = await tryApiCall('/api/payment/confirm-payment', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  bookingId: params.bookingId,
+                  amount: paymentInfo.amount,
+                  transactionType: 'deposit',
+                  paymentMethod: 'qr_code' // Đánh dấu là thanh toán QR code
+                })
+              });
 
-  // API xác nhận thanh toán cọc
-  const confirmDepositPaymentAPI = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${params.bookingId}/confirm-deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+              if (result.success) {
+                setPaymentStatus('checking');
+                setCheckingPayment(false);
+                Alert.alert(
+                  'Đã gửi yêu cầu!',
+                  '✅ Đã gửi yêu cầu xác nhận thanh toán!\n\n' +
+                  'Admin sẽ kiểm tra và xác nhận trong vài phút.\n' +
+                  'Bạn sẽ nhận được thông báo khi được duyệt.',
+                  [
+                    {
+                      text: 'Về trang chủ',
+                      onPress: () => router.replace('/')
+                    }
+                  ]
+                );
+              } else {
+                setCheckingPayment(false);
+                setPaymentStatus('pending');
+                Alert.alert('Lỗi', '❌ ' + (result.error || 'Lỗi khi gửi yêu cầu xác nhận'));
+              }
+            } catch (error) {
+              console.error('Error confirming payment:', error);
+              setCheckingPayment(false);
+              setPaymentStatus('pending');
+              Alert.alert('Lỗi', '❌ Lỗi kết nối khi gửi yêu cầu');
+            }
+          }
         }
-      });
-
-      if (result.success) {
-        console.log('✅ Đã xác nhận thanh toán cọc thành công');
-      } else {
-        console.error('❌ Lỗi xác nhận thanh toán cọc');
-      }
-    } catch (error) {
-      console.error('Error confirming deposit payment:', error);
-    }
+      ]
+    );
   };
 
-  // Xác nhận thanh toán cọc thành công (manual)
-  const confirmDepositPayment = async () => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${params.bookingId}/confirm-deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
 
-      if (result.success) {
-        setPaymentStatus('paid');
-        Alert.alert('Thành công', '✅ Thanh toán cọc thành công! Bàn đã được cọc.');
-        setTimeout(() => {
-          router.replace('/');
-        }, 1500);
-      } else {
-        Alert.alert('Lỗi', `❌ Lỗi thanh toán cọc: ${result.error || 'Có lỗi xảy ra'}`);
-      }
-    } catch (error) {
-      console.error('Deposit payment error:', error);
-      Alert.alert('Lỗi', '❌ Lỗi kết nối. Vui lòng thử lại.');
-    }
-  };
 
   // Hủy thanh toán cọc
   const cancelDepositPayment = () => {
@@ -380,24 +405,18 @@ export default function DepositPaymentScreen() {
                   </ThemedText>
                 </View>
                 
-                <View style={styles.paymentInfo}>
-                  <ThemedText style={styles.infoTitle}>Thông tin chuyển khoản:</ThemedText>
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Tài khoản:</ThemedText>
-                    <ThemedText style={styles.infoValue}>{paymentInfo.accountName}</ThemedText>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Số tài khoản:</ThemedText>
-                    <ThemedText style={styles.infoValue}>{paymentInfo.accountNumber}</ThemedText>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Ngân hàng:</ThemedText>
-                    <ThemedText style={styles.infoValue}>{selectedBank?.name}</ThemedText>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Nội dung:</ThemedText>
-                    <ThemedText style={styles.infoValue}>{paymentInfo.description}</ThemedText>
-                  </View>
+
+                {/* Hướng dẫn thanh toán */}
+                <View style={styles.instructionContainer}>
+                  <ThemedText type="defaultSemiBold" style={styles.instructionTitle}>
+                    📱 HƯỚNG DẪN THANH TOÁN
+                  </ThemedText>
+                  <ThemedText style={styles.instructionText}>
+                    1. Quét QR code bằng app ngân hàng{'\n'}
+                    2. Chuyển khoản đúng số tiền: {paymentInfo.amount.toLocaleString('vi-VN')}đ{'\n'}
+                    3. Nhấn "ĐÃ THANH TOÁN - XÁC NHẬN NGAY"{'\n'}
+                    4. Admin sẽ kiểm tra và xác nhận trong vài phút
+                  </ThemedText>
                 </View>
 
                 <View style={styles.buttonContainer}>
@@ -417,7 +436,7 @@ export default function DepositPaymentScreen() {
                     style={[styles.confirmButton, checkingPayment && styles.buttonDisabled]}
                   >
                     <ThemedText style={styles.confirmButtonText}>
-                      {checkingPayment ? '🔧 ĐANG XÁC NHẬN...' : '🔧 XÁC NHẬN THANH TOÁN THỦ CÔNG'}
+                      {checkingPayment ? '🔧 ĐANG XÁC NHẬN...' : '✅ ĐÃ THANH TOÁN - XÁC NHẬN NGAY'}
                     </ThemedText>
                   </TouchableOpacity>
                   
@@ -615,6 +634,25 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 8,
     textAlign: 'center',
+  },
+  instructionContainer: {
+    backgroundColor: '#f0f9ff',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+  },
+  instructionTitle: {
+    fontSize: 16,
+    color: '#0c4a6e',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#0c4a6e',
+    lineHeight: 20,
   },
   paymentInfo: {
     backgroundColor: '#f9fafb',

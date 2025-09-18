@@ -1,49 +1,47 @@
+require('dotenv').config();
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const Employee = require('../models/Employee');
 
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/restaurant_management';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
 async function createAdminToken() {
   try {
+    await mongoose.connect(MONGO_URI);
+    console.log('Connected to MongoDB');
+
     // Tìm admin user
-    const admin = await Employee.findOne({ role: 'admin', isActive: true });
-    
+    const admin = await Employee.findOne({ role: 'admin' });
     if (!admin) {
-      console.log('❌ Không tìm thấy admin user');
+      console.log('❌ No admin user found. Please create admin first.');
       return;
     }
 
-    console.log('👤 Admin found:', {
-      id: admin._id,
-      username: admin.username,
-      fullName: admin.fullName,
-      role: admin.role
-    });
-
-    // Tạo token mới
+    // Tạo token cho admin
     const token = jwt.sign(
-      { 
-        id: admin._id, 
+      {
+        id: admin._id,
         username: admin.username,
-        role: admin.role 
+        role: admin.role
       },
-      process.env.JWT_SECRET || 'your-secret-key',
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    console.log('🔑 New admin token:');
+    console.log('🔑 Admin Token:');
     console.log(token);
-    console.log('\n📋 Copy this token to webadmin localStorage');
-
-    // Test decode
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      console.log('\n✅ Token verification successful:');
-      console.log('Decoded:', decoded);
-    } catch (error) {
-      console.error('❌ Token verification failed:', error);
-    }
+    console.log('\n📱 To test in webadmin:');
+    console.log('1. Open browser console');
+    console.log('2. Run: localStorage.setItem("token", "' + token + '")');
+    console.log('3. Run: localStorage.setItem("user", \'{"id":"' + admin._id + '","username":"' + admin.username + '","role":"admin"}\')');
+    console.log('4. Refresh the page');
 
   } catch (error) {
-    console.error('❌ Error creating admin token:', error);
+    console.error('Error creating admin token:', error);
+  } finally {
+    await mongoose.disconnect();
+    console.log('Disconnected from MongoDB');
   }
 }
 

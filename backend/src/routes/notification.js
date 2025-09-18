@@ -282,8 +282,8 @@ router.get('/customer', authenticateToken, async (req, res) => {
   }
 });
 
-// Lấy thông báo cho nhân viên (không cần xác thực customer)
-router.get('/employee', async (req, res) => {
+// Lấy thông báo cho nhân viên
+router.get('/employee', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (page - 1) * limit;

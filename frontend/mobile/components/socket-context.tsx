@@ -34,8 +34,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           
           // Initialize socket connection
           const newSocket = io(DEFAULT_API_URL, {
-            transports: ['websocket'],
+            transports: ['websocket', 'polling'],
             timeout: 20000,
+            autoConnect: true,
           });
 
           newSocket.on('connect', () => {

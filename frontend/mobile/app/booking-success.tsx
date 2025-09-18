@@ -39,7 +39,7 @@ export default function BookingSuccessScreen() {
 
         {/* Thông báo */}
         <ThemedText style={styles.message}>
-          Cảm ơn bạn đã đặt bàn tại quán cà phê của chúng tôi!
+          Cảm ơn bạn đã đặt bàn và thanh toán cọc tại quán cà phê của chúng tôi!
         </ThemedText>
 
         {/* Thông tin booking */}
@@ -229,4 +229,5 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+
 

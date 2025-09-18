@@ -1,8 +1,8 @@
-const mongoose = require('mongoose');
 require('dotenv').config();
-
-// Import models
+const mongoose = require('mongoose');
 const Ingredient = require('../models/Ingredient');
+
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cafe_app';
 
 const sampleIngredients = [
   {
@@ -12,9 +12,13 @@ const sampleIngredients = [
     minStock: 10,
     maxStock: 100,
     unit: 'kg',
-    unitPrice: 200000,
-    supplier: 'Công ty Cà phê Việt Nam',
-    description: 'Cà phê Arabica chất lượng cao, hương vị thơm ngon'
+    unitPrice: 250000,
+    supplier: {
+      name: 'Công ty Cà phê Việt Nam',
+      contact: '0123456789'
+    },
+    description: 'Cà phê Arabica chất lượng cao',
+    isActive: true
   },
   {
     name: 'Cà phê Robusta',
@@ -23,9 +27,13 @@ const sampleIngredients = [
     minStock: 5,
     maxStock: 80,
     unit: 'kg',
-    unitPrice: 150000,
-    supplier: 'Công ty Cà phê Việt Nam',
-    description: 'Cà phê Robusta đậm đà, vị đắng nhẹ'
+    unitPrice: 180000,
+    supplier: {
+      name: 'Công ty Cà phê Việt Nam',
+      contact: '0123456789'
+    },
+    description: 'Cà phê Robusta đậm đà',
+    isActive: true
   },
   {
     name: 'Sữa tươi',
@@ -35,8 +43,12 @@ const sampleIngredients = [
     maxStock: 50,
     unit: 'l',
     unitPrice: 25000,
-    supplier: 'Vinamilk',
-    description: 'Sữa tươi nguyên kem, béo ngậy'
+    supplier: {
+      name: 'Vinamilk',
+      contact: '0123456788'
+    },
+    description: 'Sữa tươi nguyên kem',
+    isActive: true
   },
   {
     name: 'Sữa đặc',
@@ -44,131 +56,147 @@ const sampleIngredients = [
     currentStock: 15,
     minStock: 3,
     maxStock: 30,
-    unit: 'kg',
-    unitPrice: 45000,
-    supplier: 'Nestlé',
-    description: 'Sữa đặc có đường, ngọt vừa phải'
+    unit: 'l',
+    unitPrice: 35000,
+    supplier: {
+      name: 'Vinamilk',
+      contact: '0123456788'
+    },
+    description: 'Sữa đặc có đường',
+    isActive: true
   },
   {
     name: 'Đường trắng',
-    category: 'other',
+    category: 'food',
     currentStock: 25,
     minStock: 5,
     maxStock: 50,
     unit: 'kg',
-    unitPrice: 18000,
-    supplier: 'Đường Biên Hòa',
-    description: 'Đường trắng tinh luyện, ngọt thanh'
+    unitPrice: 15000,
+    supplier: {
+      name: 'Công ty Đường Biên Hòa',
+      contact: '0123456787'
+    },
+    description: 'Đường trắng tinh luyện',
+    isActive: true
   },
   {
-    name: 'Đường nâu',
-    category: 'other',
-    currentStock: 10,
-    minStock: 2,
-    maxStock: 20,
-    unit: 'kg',
-    unitPrice: 22000,
-    supplier: 'Đường Biên Hòa',
-    description: 'Đường nâu tự nhiên, hương vị đặc biệt'
-  },
-  {
-    name: 'Si-rô Vanilla',
+    name: 'Si-rô vani',
     category: 'syrup',
     currentStock: 8,
     minStock: 2,
-    maxStock: 15,
+    maxStock: 20,
     unit: 'l',
-    unitPrice: 85000,
-    supplier: 'Monin',
-    description: 'Si-rô vani thơm ngon, chất lượng cao'
+    unitPrice: 120000,
+    supplier: {
+      name: 'Công ty Si-rô ABC',
+      contact: '0123456786'
+    },
+    description: 'Si-rô vani tự nhiên',
+    isActive: true
   },
   {
-    name: 'Si-rô Caramel',
+    name: 'Si-rô caramel',
     category: 'syrup',
     currentStock: 6,
     minStock: 2,
-    maxStock: 12,
+    maxStock: 15,
     unit: 'l',
-    unitPrice: 95000,
-    supplier: 'Monin',
-    description: 'Si-rô caramel đậm đà, vị ngọt thanh'
+    unitPrice: 150000,
+    supplier: {
+      name: 'Công ty Si-rô ABC',
+      contact: '0123456786'
+    },
+    description: 'Si-rô caramel thơm ngon',
+    isActive: true
   },
   {
-    name: 'Whipped Cream',
+    name: 'Kem tươi',
     category: 'topping',
     currentStock: 12,
     minStock: 3,
     maxStock: 25,
     unit: 'l',
-    unitPrice: 120000,
-    supplier: 'Rich\'s',
-    description: 'Kem tươi đánh bông, béo ngậy'
+    unitPrice: 45000,
+    supplier: {
+      name: 'Công ty Kem XYZ',
+      contact: '0123456785'
+    },
+    description: 'Kem tươi whipping cream',
+    isActive: true
   },
   {
-    name: 'Bột Cacao',
-    category: 'coffee',
+    name: 'Bột ca cao',
+    category: 'other',
+    currentStock: 10,
+    minStock: 2,
+    maxStock: 20,
+    unit: 'kg',
+    unitPrice: 80000,
+    supplier: {
+      name: 'Công ty Ca cao DEF',
+      contact: '0123456784'
+    },
+    description: 'Bột ca cao nguyên chất',
+    isActive: true
+  },
+  {
+    name: 'Trà xanh',
+    category: 'beverage',
     currentStock: 5,
     minStock: 1,
-    maxStock: 10,
+    maxStock: 15,
     unit: 'kg',
-    unitPrice: 180000,
-    supplier: 'Valrhona',
-    description: 'Bột cacao nguyên chất, hương vị đậm đà'
-  },
-  {
-    name: 'Đá viên',
-    category: 'other',
-    currentStock: 100,
-    minStock: 20,
-    maxStock: 200,
-    unit: 'kg',
-    unitPrice: 5000,
-    supplier: 'Công ty Đá lạnh',
-    description: 'Đá viên sạch, an toàn thực phẩm'
-  },
-  {
-    name: 'Cốc giấy',
-    category: 'other',
-    currentStock: 500,
-    minStock: 100,
-    maxStock: 1000,
-    unit: 'pcs',
-    unitPrice: 2000,
-    supplier: 'Công ty Bao bì',
-    description: 'Cốc giấy 12oz, thân thiện môi trường'
+    unitPrice: 120000,
+    supplier: {
+      name: 'Công ty Trà GHI',
+      contact: '0123456783'
+    },
+    description: 'Trà xanh cao cấp',
+    isActive: true
   }
 ];
 
 async function createSampleIngredients() {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/cafe_management');
-    console.log('✅ Connected to MongoDB');
+    await mongoose.connect(MONGO_URI);
+    console.log('Connected to MongoDB');
 
     // Clear existing ingredients
     await Ingredient.deleteMany({});
-    console.log('🗑️ Cleared existing ingredients');
+    console.log('Cleared existing ingredients');
 
     // Create sample ingredients
-    const createdIngredients = await Ingredient.insertMany(sampleIngredients);
-    console.log(`✅ Created ${createdIngredients.length} sample ingredients`);
+    for (const ingredientData of sampleIngredients) {
+      const ingredient = new Ingredient(ingredientData);
+      await ingredient.save();
+      console.log(`Created ingredient: ${ingredient.name}`);
+    }
 
-    // Display created ingredients
-    console.log('\n📋 Sample ingredients created:');
-    createdIngredients.forEach((ingredient, index) => {
-      console.log(`${index + 1}. ${ingredient.name} - ${ingredient.currentStock}${ingredient.unit} - ${ingredient.unitPrice.toLocaleString('vi-VN')} VNĐ`);
+    console.log(`\n✅ Successfully created ${sampleIngredients.length} sample ingredients!`);
+    
+    // Display summary
+    const totalValue = sampleIngredients.reduce((sum, ing) => sum + (ing.currentStock * ing.unitPrice), 0);
+    console.log(`\n📊 Summary:`);
+    console.log(`Total ingredients: ${sampleIngredients.length}`);
+    console.log(`Total stock value: ${totalValue.toLocaleString('vi-VN')} VND`);
+    
+    const categoryCount = {};
+    sampleIngredients.forEach(ing => {
+      categoryCount[ing.category] = (categoryCount[ing.category] || 0) + 1;
+    });
+    
+    console.log(`\n📋 By category:`);
+    Object.entries(categoryCount).forEach(([category, count]) => {
+      console.log(`- ${category}: ${count} items`);
     });
 
-    console.log('\n🎉 Sample ingredients created successfully!');
-    
   } catch (error) {
-    console.error('❌ Error creating sample ingredients:', error);
+    console.error('Error creating sample ingredients:', error);
   } finally {
-    // Close connection
-    await mongoose.connection.close();
-    console.log('🔌 Disconnected from MongoDB');
+    await mongoose.disconnect();
+    console.log('Disconnected from MongoDB');
   }
 }
 
-// Run the script
 createSampleIngredients();

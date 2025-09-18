@@ -19,6 +19,9 @@ const ingredientsRouter = require('./routes/ingredients');
 const importOrdersRouter = require('./routes/importOrders');
 const exportOrdersRouter = require('./routes/exportOrders');
 const inventoryTransactionsRouter = require('./routes/inventoryTransactions');
+const inventoryDashboardRouter = require('./routes/inventoryDashboard');
+const simpleInventoryRouter = require('./routes/simpleInventory');
+const simpleStockRouter = require('./routes/simpleStock');
 const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
@@ -56,6 +59,9 @@ app.use('/api/ingredients', ingredientsRouter);
 app.use('/api/import-orders', importOrdersRouter);
 app.use('/api/export-orders', exportOrdersRouter);
 app.use('/api/inventory-transactions', inventoryTransactionsRouter);
+app.use('/api/inventory', inventoryDashboardRouter);
+app.use('/api/simple-inventory', simpleInventoryRouter);
+app.use('/api/simple-stock', simpleStockRouter);
 app.use('/api/dashboard', dashboardRouter);
 
 // Removed /api/upload endpoint
@@ -124,6 +130,16 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle new booking creation
+  socket.on('booking_created', (data) => {
+    console.log('📅 New booking created:', data);
+    // Broadcast to all employees and admins
+    io.to('employees').emit('booking_created', data);
+    if (data.customerId) {
+      io.to(`customer_${data.customerId}`).emit('booking_created', data);
+    }
+  });
+
   // Handle order updates
   socket.on('order_updated', (data) => {
     console.log('🛒 Order updated:', data);
@@ -165,7 +181,7 @@ app.set('io', io);
 
 // DB connect and server start
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/restaurant_management';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/cafe_app';
 
 async function start() {
   try {

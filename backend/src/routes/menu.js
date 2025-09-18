@@ -6,8 +6,60 @@ const router = express.Router();
 // Get all menu items
 router.get('/', async (req, res) => {
   try {
-    const menus = await Menu.find();
-    res.json(menus);
+    const { category, search, limit = 50, page = 1 } = req.query;
+    let query = {};
+    
+    // Filter by category if provided
+    if (category) {
+      query.category = category;
+    }
+    
+    // Search by name if provided
+    if (search) {
+      query.name = { $regex: search, $options: 'i' };
+    }
+    
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const menus = await Menu.find(query)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
+    
+    const total = await Menu.countDocuments(query);
+    
+    res.json({
+      data: menus,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get menu categories
+router.get('/categories', async (req, res) => {
+  try {
+    const categories = await Menu.distinct('category');
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get menu item by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const menu = await Menu.findById(req.params.id);
+    if (!menu) {
+      return res.status(404).json({ error: 'Món ăn không tồn tại' });
+    }
+    res.json(menu);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

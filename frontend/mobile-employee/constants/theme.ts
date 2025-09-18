@@ -1,6 +1,6 @@
 /**
- * Theme colors for Employee Mobile App
- * Using red color scheme for employee interface
+ * Modern Theme colors for Employee Mobile App
+ * Using professional red color scheme for employee interface
  */
 
 import { Platform } from 'react-native';
@@ -10,30 +10,50 @@ const tintColorDark = '#ef4444'; // Red-500
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: '#1f2937',
+    textSecondary: '#6b7280',
+    background: '#ffffff',
+    backgroundSecondary: '#f9fafb',
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: '#6b7280',
+    tabIconDefault: '#9ca3af',
     tabIconSelected: tintColorLight,
     primary: '#dc2626',
     primaryLight: '#fef2f2',
-    success: '#16a34a',
+    primaryDark: '#b91c1c',
+    success: '#10b981',
+    successLight: '#d1fae5',
     warning: '#f59e0b',
-    error: '#dc2626',
+    warningLight: '#fef3c7',
+    error: '#ef4444',
+    errorLight: '#fee2e2',
+    border: '#e5e7eb',
+    card: '#ffffff',
+    shadow: '#00000010',
+    overlay: '#00000050',
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: '#f9fafb',
+    textSecondary: '#d1d5db',
+    background: '#111827',
+    backgroundSecondary: '#1f2937',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: '#9ca3af',
+    tabIconDefault: '#6b7280',
     tabIconSelected: tintColorDark,
     primary: '#ef4444',
     primaryLight: '#1f2937',
+    primaryDark: '#dc2626',
     success: '#22c55e',
+    successLight: '#064e3b',
     warning: '#fbbf24',
-    error: '#ef4444',
+    warningLight: '#451a03',
+    error: '#f87171',
+    errorLight: '#7f1d1d',
+    border: '#374151',
+    card: '#1f2937',
+    shadow: '#00000030',
+    overlay: '#00000070',
   },
 };
 

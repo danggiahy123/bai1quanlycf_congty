@@ -13,13 +13,19 @@ const OrderItemSchema = new mongoose.Schema(
 const OrderSchema = new mongoose.Schema(
   {
     tableId: { type: String, required: true, index: true },
-    status: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+    tableName: { type: String },
+    customerId: { type: String },
+    customerName: { type: String },
+    status: { type: String, enum: ['pending', 'paid', 'completed'], default: 'pending' },
     items: { type: [OrderItemSchema], default: [] },
+    totalAmount: { type: Number, default: 0 },
+    paymentMethod: { type: String, default: 'cash' },
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('Order', OrderSchema, 'orders');
+
 
 
 

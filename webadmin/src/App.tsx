@@ -9,6 +9,12 @@ import DepositPaymentModal from './components/DepositPaymentModal';
 import TransactionHistory from './components/TransactionHistory';
 import InventoryManagement from './components/InventoryManagement';
 import Dashboard from './components/Dashboard';
+import MenuList from './components/MenuList';
+import InventoryDashboard from './components/InventoryDashboard';
+import StockCheck from './components/StockCheck';
+import ImportExport from './components/ImportExport';
+import SimpleInventory from './components/SimpleInventory';
+import SimpleStockManagement from './components/SimpleStockManagement';
 import { useSocket } from './hooks/useSocket';
 
 type TableHistoryEntry = {
@@ -24,6 +30,13 @@ type TableHistoryEntry = {
   createdAt: string;
 };
 
+type Ingredient = {
+  ingredientId: string;
+  ingredientName: string;
+  quantity: number;
+  unit: string;
+};
+
 type Menu = {
   _id: string;
   name: string;
@@ -32,6 +45,8 @@ type Menu = {
   note?: string;
   available?: boolean;
   size?: string;
+  category?: string;
+  ingredients?: Ingredient[];
 };
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -70,7 +85,7 @@ type Employee = {
 export default function App() {
   const [user, setUser] = useState<Employee | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<'menu' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history'>('menu');
+  const [tab, setTab] = useState<'menu' | 'menu-list' | 'dashboard' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history' | 'inventory-dashboard' | 'stock-check' | 'import-export'>('dashboard');
   const [items, setItems] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -86,9 +101,12 @@ export default function App() {
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
+    console.log('🔧 Loading from localStorage - Token:', savedToken ? 'Present' : 'Missing');
+    console.log('🔧 Loading from localStorage - User:', savedUser ? 'Present' : 'Missing');
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
+      console.log('🔧 Token and user loaded from localStorage');
     }
   }, []);
 
@@ -108,6 +126,17 @@ export default function App() {
     const handleBookingStatusChange = (data: any) => {
       console.log('📅 Booking status changed:', data);
       toast.success(`Booking ${data.bookingId} đã ${data.status}`);
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleBookingCreated = (data: any) => {
+      console.log('📅 New booking created:', data);
+      toast.info(`Có đặt bàn mới: Bàn ${data.tableName} - ${data.customerName}`);
       // Refresh bookings data if on bookings tab
       if (tab === 'bookings') {
         loadBookings();
@@ -141,9 +170,40 @@ export default function App() {
       toast.info(data.title || 'Thông báo mới');
     };
 
+    const handleDepositBookingCreated = (data: any) => {
+      console.log('💰 New deposit booking created:', data);
+      toast(`💰 ${data.message} - Bàn ${data.tableName}`, {
+        icon: '⚠️',
+        style: {
+          background: '#fbbf24',
+          color: '#1f2937',
+        },
+      });
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handlePaymentConfirmed = (data: any) => {
+      console.log('💳 Payment confirmed:', data);
+      toast.success(`💳 Thanh toán cọc ${data.amount?.toLocaleString()}đ cho bàn ${data.tableName} đã được xác nhận`);
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
     // Listen for real-time events
     socket.on('table_status_changed', handleTableStatusChange);
     socket.on('booking_status_changed', handleBookingStatusChange);
+    socket.on('booking_created', handleBookingCreated);
+    socket.on('deposit_booking_created', handleDepositBookingCreated);
+    socket.on('payment_confirmed', handlePaymentConfirmed);
     socket.on('order_status_changed', handleOrderStatusChange);
     socket.on('payment_status_changed', handlePaymentStatusChange);
     socket.on('new_notification', handleNewNotification);
@@ -151,6 +211,9 @@ export default function App() {
     return () => {
       socket.off('table_status_changed', handleTableStatusChange);
       socket.off('booking_status_changed', handleBookingStatusChange);
+      socket.off('booking_created', handleBookingCreated);
+      socket.off('deposit_booking_created', handleDepositBookingCreated);
+      socket.off('payment_confirmed', handlePaymentConfirmed);
       socket.off('order_status_changed', handleOrderStatusChange);
       socket.off('payment_status_changed', handlePaymentStatusChange);
       socket.off('new_notification', handleNewNotification);
@@ -158,10 +221,13 @@ export default function App() {
   }, [socket, tab]);
 
   const handleLogin = (employee: Employee, authToken: string) => {
+    console.log('🔧 Login successful:', employee);
+    console.log('🔧 Token received:', authToken ? 'Present' : 'Missing');
     setUser(employee);
     setToken(authToken);
     localStorage.setItem('token', authToken);
     localStorage.setItem('user', JSON.stringify(employee));
+    console.log('🔧 Token saved to localStorage');
   };
 
   const handleLogout = () => {
@@ -172,6 +238,7 @@ export default function App() {
   };
 
   const filtered = useMemo(() => {
+    if (!Array.isArray(items)) return [];
     if (!q.trim()) return items;
     return items.filter((x) => `${x.name} ${x.note ?? ''}`.toLowerCase().includes(q.toLowerCase()));
   }, [items, q]);
@@ -179,8 +246,17 @@ export default function App() {
   async function load() {
     setLoading(true);
     try {
-      const res = await axios.get<Menu[]>(`${API}/api/menu`);
-      setItems(res.data);
+      const res = await axios.get<{data: Menu[], pagination: any}>(`${API}/api/menu`);
+      console.log('Menu API response:', res.data);
+      if (Array.isArray(res.data.data)) {
+        setItems(res.data.data);
+      } else {
+        console.error('API returned non-array data:', res.data);
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading menu:', error);
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -321,6 +397,20 @@ export default function App() {
             </button>
             
             <button 
+              onClick={() => setTab('menu-list')} 
+              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
+                tab === 'menu-list' 
+                  ? 'bg-green-600 text-white shadow-lg' 
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              }`}
+            >
+              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Danh sách Món
+            </button>
+            
+            <button 
               onClick={() => setTab('menu')} 
               className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
                 tab === 'menu' 
@@ -329,7 +419,7 @@ export default function App() {
               }`}
             >
               <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
               </svg>
               Quản lý Món
             </button>
@@ -411,9 +501,9 @@ export default function App() {
             
             
             <button 
-              onClick={() => setTab('inventory')} 
+              onClick={() => setTab('inventory-dashboard')} 
               className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
-                tab === 'inventory' 
+                tab === 'inventory-dashboard' 
                   ? 'bg-green-600 text-white shadow-lg' 
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               }`}
@@ -469,13 +559,16 @@ export default function App() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white capitalize">
               {tab === 'dashboard' && 'Dashboard'}
+              {tab === 'menu-list' && 'Danh sách Món ăn'}
               {tab === 'menu' && 'Quản lý Món ăn'}
               {tab === 'tables' && 'Quản lý Bàn'}
               {tab === 'employees' && 'Quản lý Nhân viên'}
               {tab === 'customers' && 'Quản lý Khách hàng'}
               {tab === 'bookings' && 'Quản lý Đặt bàn'}
               {tab === 'payments' && 'THANH TOÁN NGAY'}
-              {tab === 'inventory' && 'Quản lý Kho hàng'}
+              {tab === 'inventory-dashboard' && 'Quản lý Kho hàng'}
+              {tab === 'stock-check' && 'Kiểm kho'}
+              {tab === 'import-export' && 'Nhập/Xuất kho'}
               {tab === 'transactions' && 'Lịch sử Giao dịch'}
             </h2>
             
@@ -508,6 +601,8 @@ export default function App() {
         <div className="flex-1 bg-gray-900 p-6 overflow-y-auto">
         {tab==='dashboard' ? (
           <Dashboard API={API} token={token} />
+        ) : tab==='menu-list' ? (
+          <MenuList API={API} token={token} />
         ) : tab==='menu' ? (
           loading ? (
             <div className="flex flex-col items-center justify-center py-16">
@@ -622,8 +717,12 @@ export default function App() {
           <CustomersAdmin />
         ) : tab==='payments' ? (
           <PaymentsAdmin />
-        ) : tab==='inventory' ? (
-          <InventoryManagement API={API} token={token} />
+        ) : tab==='inventory-dashboard' ? (
+          <SimpleStockManagement API={API} token={token} />
+        ) : tab==='stock-check' ? (
+          <StockCheck API={API} token={token} />
+        ) : tab==='import-export' ? (
+          <ImportExport API={API} token={token} />
         ) : tab==='transactions' ? (
           <TransactionHistory API={API} />
         ) : (
@@ -1216,8 +1315,6 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showDepositPaymentModal, setShowDepositPaymentModal] = useState(false);
-  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
   const [depositPaymentData, setDepositPaymentData] = useState<{
     tableId: string;
     depositAmount: number;
@@ -1455,25 +1552,24 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
       return;
     }
 
-    // Nếu có cọc tiền, hiển thị modal chọn phương thức thanh toán
-    console.log('Booking depositAmount:', booking.depositAmount);
-    if (booking.depositAmount && booking.depositAmount > 0) {
-      console.log('Showing payment method modal');
-      setSelectedBooking(booking);
-      setShowPaymentMethodModal(true);
-    } else {
-      console.log('No deposit, confirming directly');
-      // Không có cọc, xác nhận trực tiếp
-      await confirmBooking(bookingId, 'cash');
-    }
+    // Xác nhận trực tiếp không cần chọn phương thức thanh toán
+    await confirmBooking(bookingId, 'cash');
   };
 
   const confirmBooking = async (bookingId: string, method: 'cash' | 'bank_transfer') => {
-    console.log('Confirming booking:', bookingId, 'with method:', method);
+    console.log('🔧 Confirming booking:', bookingId, 'with method:', method);
+    console.log('🔧 Token:', token ? 'Present' : 'Missing');
+    console.log('🔧 API URL:', API);
+
+    // Hiển thị loading toast
+    const loadingToast = toast.loading('⏳ Đang xác nhận booking...');
 
     try {
       const booking = bookings.find(b => b._id === bookingId);
       const depositAmount = booking?.depositAmount || 0;
+      
+      console.log('🔧 Booking found:', booking);
+      console.log('🔧 Deposit amount:', depositAmount);
       
       const res = await axios.post(`${API}/api/bookings/${bookingId}/confirm`, {
         depositAmount: depositAmount,
@@ -1482,27 +1578,85 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('Confirm response:', res.data);
+      console.log('✅ Confirm response:', res.data);
+      
+      // Đóng loading toast
+      toast.dismiss(loadingToast);
       
       if (res.data.message) {
-        toast.success('Xác nhận booking thành công!');
+        toast.success('✅ Xác nhận booking thành công!', {
+          duration: 4000,
+          style: {
+            background: '#10B981',
+            color: 'white',
+            fontWeight: 'bold',
+          },
+        });
         loadBookings();
         loadStats();
-        setShowPaymentMethodModal(false);
-        setSelectedBooking(null);
+      } else {
+        toast.error('❌ Phản hồi không hợp lệ từ server', {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
       }
     } catch (error: any) {
-      console.error('Confirm error:', error);
-      console.error('Error response:', error.response?.data);
+      console.error('❌ Confirm error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
+      // Đóng loading toast
+      toast.dismiss(loadingToast);
       
       // Xử lý lỗi token hết hạn
       if (error.response?.status === 401) {
-        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        toast.error('🔐 Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', {
+          duration: 5000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
         handleLogout();
         return;
       }
       
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+      if (error.response?.status === 400) {
+        toast.error(`❌ ${error.response.data.message || 'Dữ liệu không hợp lệ'}`, {
+          duration: 4000,
+          style: {
+            background: '#F59E0B',
+            color: 'white',
+          },
+        });
+      } else if (error.response?.status === 404) {
+        toast.error('❌ Không tìm thấy booking', {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        toast.error('🌐 Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại.', {
+          duration: 5000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      } else {
+        toast.error(`❌ ${error.response?.data?.message || 'Có lỗi xảy ra khi xác nhận booking'}`, {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      }
     }
   };
 
@@ -1546,6 +1700,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
       toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
   };
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1773,10 +1928,15 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
               {booking.status === 'pending' && (
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleConfirm(booking._id)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleConfirm(booking._id);
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="button"
                   >
-                    Xác nhận
+                    ✅ Xác nhận
                   </button>
                   <button
                     onClick={() => handleCancel(booking._id)}
@@ -2241,9 +2401,12 @@ function TablesAdmin() {
   const [detailFor, setDetailFor] = useState<Table | null>(null);
   const [detailOrder, setDetailOrder] = useState<{ items: { name: string; price: number; quantity: number }[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
-  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
+  
+  const [depositPaymentData, setDepositPaymentData] = useState<{
+    tableId: string;
+    depositAmount: number;
+    bookingId: string;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -2453,88 +2616,6 @@ function TablesAdmin() {
         </div>
       </Dialog>
 
-      {/* Payment Method Modal */}
-      <Dialog open={showPaymentMethodModal} onClose={() => setShowPaymentMethodModal(false)} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
-            <Dialog.Title className="text-lg font-semibold">Chọn phương thức thanh toán cọc</Dialog.Title>
-            
-            {selectedBooking && (
-              <div className="space-y-3">
-                <div className="bg-gray-700 p-3 rounded-lg">
-                  <div className="text-sm text-gray-300">Thông tin booking:</div>
-                  <div className="text-white font-medium">Bàn: {selectedBooking.table?.name}</div>
-                  <div className="text-white">Số tiền cọc: {selectedBooking.depositAmount?.toLocaleString()}đ</div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-700">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="cash"
-                      checked={paymentMethod === 'cash'}
-                      onChange={(e) => setPaymentMethod(e.target.value as 'cash')}
-                      className="text-green-500"
-                    />
-                    <div>
-                      <div className="font-medium text-white">💰 Tiền mặt</div>
-                      <div className="text-sm text-gray-400">Xác nhận trực tiếp, không cần QR</div>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-700">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="bank_transfer"
-                      checked={paymentMethod === 'bank_transfer'}
-                      onChange={(e) => setPaymentMethod(e.target.value as 'bank_transfer')}
-                      className="text-green-500"
-                    />
-                    <div>
-                      <div className="font-medium text-white">🏦 Chuyển khoản</div>
-                      <div className="text-sm text-gray-400">Hiển thị QR code để thanh toán</div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button 
-                onClick={() => setShowPaymentMethodModal(false)} 
-                className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600"
-              >
-                Hủy
-              </button>
-              <button 
-                onClick={() => {
-                  if (selectedBooking) {
-                    if (paymentMethod === 'bank_transfer') {
-                      // Hiển thị QR code
-                      setDepositPaymentData({
-                        tableId: selectedBooking.table?._id || selectedBooking.table,
-                        depositAmount: selectedBooking.depositAmount || 0,
-                        bookingId: selectedBooking._id
-                      });
-                      setShowDepositPaymentModal(true);
-                      setShowPaymentMethodModal(false);
-                    } else {
-                      // Xác nhận trực tiếp
-                      confirmBooking(selectedBooking._id, 'cash');
-                    }
-                  }
-                }}
-                className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
-              >
-                {paymentMethod === 'bank_transfer' ? 'Hiển thị QR' : 'Xác nhận'}
-              </button>
-            </div>
-          </Dialog.Panel>
-        </div>
-      </Dialog>
 
     </div>
   );

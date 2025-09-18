@@ -48,7 +48,7 @@ export default function OrderConfirmScreen() {
           })
         });
 
-        if (result.success) {
+        if (result.success && result.data && result.data.success) {
           setQrCode(result.data.qrCode);
           console.log('✅ QR code đã được tạo từ API');
         } else {
@@ -117,9 +117,9 @@ export default function OrderConfirmScreen() {
       if (result.success) {
         console.log('✅ Booking created successfully');
         
-        // Chuyển đến màn hình thanh toán QR
+        // Chuyển đến màn hình thanh toán cọc QR
         router.push({
-          pathname: '/payment',
+          pathname: '/deposit-payment',
           params: {
             bookingId: result.data?.booking?.id || result.data?.bookingId || result.data?._id,
             tableId: state.selectedTable?.id,
@@ -161,7 +161,14 @@ export default function OrderConfirmScreen() {
 
       if (result.success && result.data?.status === 'completed') {
         console.log('✅ Đã phát hiện thanh toán!');
-        await confirmDepositPayment();
+        Alert.alert(
+          'Thành công', 
+          '✅ ĐÃ NHẬN THẤY THANH TOÁN! Vui lòng đợi quán xác nhận.\n\n' +
+          '📞 Liên hệ quán nếu cần hỗ trợ.',
+          [
+            { text: 'OK', onPress: () => router.replace('/') }
+          ]
+        );
       } else {
         Alert.alert('Thông báo', 'Chưa phát hiện thanh toán. Vui lòng thử lại sau 30 giây.');
       }
@@ -171,57 +178,6 @@ export default function OrderConfirmScreen() {
     }
   };
 
-  // Xác nhận thanh toán cọc
-  const confirmDepositPayment = async () => {
-    if (!bookingData) return;
-    
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${bookingData.bookingId}/confirm-deposit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (result.success) {
-        // Đóng QR modal
-        setShowQRPayment(false);
-        setQrCode('');
-        setBookingData(null);
-        
-        // Hiển thị thông báo thành công và chuyển đến trang xác nhận lần 2
-        Alert.alert(
-          '🎉 CỌC THÀNH CÔNG!',
-          `Đã cọc ${parseInt(bookingData.depositAmount).toLocaleString()}đ cho bàn ${bookingData.tableName}.\n\n✅ Thông báo đã được gửi đến nhân viên.`,
-          [
-            {
-              text: 'Xác nhận lần 2',
-              onPress: () => {
-                // Chuyển đến trang xác nhận lần 2
-                router.push({
-                  pathname: '/booking-confirm',
-                  params: {
-                    bookingId: bookingData.bookingId,
-                    tableId: bookingData.tableId,
-                    depositAmount: bookingData.depositAmount,
-                    tableName: bookingData.tableName,
-                    isSecondConfirm: 'true'
-                  }
-                });
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Lỗi', result.error || 'Xác nhận cọc thất bại');
-      }
-    } catch (error) {
-      console.error('Error confirming deposit:', error);
-      Alert.alert('Lỗi', 'Lỗi kết nối khi xác nhận cọc');
-    }
-  };
 
   // Hủy thanh toán
   const cancelPayment = () => {
@@ -386,25 +342,6 @@ export default function OrderConfirmScreen() {
                   </View>
                 )}
 
-                <View style={styles.paymentInfo}>
-                  <ThemedText style={styles.paymentInfoTitle}>Thông tin chuyển khoản:</ThemedText>
-                  <View style={styles.paymentInfoRow}>
-                    <ThemedText style={styles.paymentInfoLabel}>Tài khoản:</ThemedText>
-                    <ThemedText style={styles.paymentInfoValue}>DANG GIA HY</ThemedText>
-                  </View>
-                  <View style={styles.paymentInfoRow}>
-                    <ThemedText style={styles.paymentInfoLabel}>Số TK:</ThemedText>
-                    <ThemedText style={styles.paymentInfoValue}>2246811357</ThemedText>
-                  </View>
-                  <View style={styles.paymentInfoRow}>
-                    <ThemedText style={styles.paymentInfoLabel}>Ngân hàng:</ThemedText>
-                    <ThemedText style={styles.paymentInfoValue}>Techcombank</ThemedText>
-                  </View>
-                  <View style={styles.paymentInfoRow}>
-                    <ThemedText style={styles.paymentInfoLabel}>Số tiền:</ThemedText>
-                    <ThemedText style={styles.paymentInfoValue}>{parseInt(bookingData?.depositAmount || 0).toLocaleString()}đ</ThemedText>
-                  </View>
-                </View>
 
                 <View style={styles.qrPaymentButtons}>
                   <TouchableOpacity 
@@ -416,14 +353,6 @@ export default function OrderConfirmScreen() {
                     </ThemedText>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity 
-                    onPress={confirmDepositPayment}
-                    style={styles.confirmPaymentButton}
-                  >
-                    <ThemedText style={styles.confirmPaymentButtonText}>
-                      ✅ Đã chuyển khoản - Xác nhận
-                    </ThemedText>
-                  </TouchableOpacity>
                   
                   <TouchableOpacity 
                     onPress={cancelPayment}

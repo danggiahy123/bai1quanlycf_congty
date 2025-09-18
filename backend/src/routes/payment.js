@@ -91,7 +91,7 @@ router.post('/generate-qr', async (req, res) => {
   }
 });
 
-// Kiểm tra thanh toán tự động (simulate)
+// Kiểm tra thanh toán - CHỈ ADMIN MỚI CÓ THỂ XÁC NHẬN
 router.post('/check-payment', async (req, res) => {
   try {
     const { bookingId, amount, transactionType = 'deposit' } = req.body;
@@ -106,68 +106,26 @@ router.post('/check-payment', async (req, res) => {
     }
 
     // Tìm booking
-    let booking = null;
-    try {
-      booking = await Booking.findById(bookingId);
-    } catch (error) {
-      console.log('Booking không tồn tại, tiếp tục demo mode');
-    }
-
-    // Kiểm tra xem đã có giao dịch thanh toán thành công chưa
-    try {
-      console.log('🔍 Tìm kiếm giao dịch với:', { bookingId, transactionType, amount });
-      
-      // Tìm tất cả giao dịch với bookingId này để debug
-      const allTransactions = await TransactionHistory.find({
-        bookingId: bookingId
-      });
-      console.log('🔍 Tất cả giao dịch với bookingId:', allTransactions.length);
-      
-      // Tìm giao dịch chính xác với bookingId, transactionType, status và amount
-      const existingTransaction = await TransactionHistory.findOne({
-        bookingId: bookingId,
-        transactionType: transactionType,
-        status: 'completed',
-        amount: amount
-      });
-
-      console.log('🔍 Kết quả tìm kiếm:', existingTransaction ? 'Tìm thấy' : 'Không tìm thấy');
-      
-      // Nếu không tìm thấy giao dịch chính xác, trả về false
-      if (!existingTransaction) {
-        console.log('❌ Không tìm thấy giao dịch thanh toán thành công');
-        return res.json({
-          success: false,
-          message: 'Chưa phát hiện thanh toán',
-          data: {
-            status: 'pending',
-            message: 'CHƯA CÓ THANH TOÁN'
-          }
-        });
-      }
-
-      // Nếu tìm thấy giao dịch
-      console.log('✅ Đã tìm thấy giao dịch thanh toán thành công:', existingTransaction._id);
-      return res.json({
-        success: true,
-        message: 'Thanh toán đã được xác nhận',
-        data: {
-          status: 'completed',
-          message: 'ĐÃ NHẬN THẤY THANH TOÁN',
-          transactionId: existingTransaction._id
-        }
-      });
-    } catch (error) {
-      console.log('Lỗi kiểm tra giao dịch:', error.message);
-      return res.json({
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
         success: false,
-        message: 'Lỗi khi kiểm tra thanh toán',
-        data: {
-          status: 'error',
-          message: 'LỖI KIỂM TRA'
-        }
+        message: 'Không tìm thấy booking'
       });
     }
+
+    // LUÔN TRẢ VỀ FALSE - CHỈ ADMIN MỚI CÓ THỂ XÁC NHẬN THANH TOÁN
+    console.log('❌ Hệ thống không thể tự động kiểm tra thanh toán ngân hàng');
+    console.log('❌ Chỉ admin mới có thể xác nhận thanh toán thủ công');
+    
+    return res.json({
+      success: false,
+      message: 'Hệ thống không thể tự động kiểm tra thanh toán ngân hàng. Vui lòng chuyển khoản và liên hệ quán để xác nhận.',
+      data: {
+        status: 'pending',
+        message: 'CHƯA CÓ THANH TOÁN - CẦN XÁC NHẬN THỦ CÔNG'
+      }
+    });
 
   } catch (error) {
     console.error('Error checking payment:', error);
@@ -178,7 +136,7 @@ router.post('/check-payment', async (req, res) => {
   }
 });
 
-// API để admin xác nhận thanh toán thủ công (simulate việc nhận tiền)
+// API để admin xác nhận thanh toán thủ công (chỉ dành cho admin thật)
 router.post('/confirm-payment', async (req, res) => {
   try {
     const { bookingId, amount, transactionType = 'deposit' } = req.body;
@@ -198,6 +156,25 @@ router.post('/confirm-payment', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy booking'
+      });
+    }
+
+    // Kiểm tra xem đã có giao dịch thanh toán thành công chưa
+    const existingTransaction = await TransactionHistory.findOne({
+      bookingId: bookingId,
+      transactionType: transactionType,
+      status: 'completed',
+      amount: amount
+    });
+
+    if (existingTransaction) {
+      return res.json({
+        success: true,
+        message: 'Thanh toán đã được xác nhận trước đó',
+        data: {
+          transactionId: existingTransaction._id,
+          status: 'already_confirmed'
+        }
       });
     }
 
@@ -228,6 +205,18 @@ router.post('/confirm-payment', async (req, res) => {
 
     await transaction.save();
     console.log('✅ Đã tạo giao dịch thanh toán thành công:', transaction._id);
+
+    // TẠM THỜI ẨN: Gửi thông báo cho admin khi có cọc (QR code hoặc Facebook)
+    // Thông báo sẽ chỉ được gửi khi admin thực sự xác nhận cọc
+    if (transactionType === 'deposit') {
+      console.log('✅ Đã lưu giao dịch cọc, KHÔNG gửi thông báo cho admin - chờ admin xác nhận');
+    } else {
+      console.log('✅ Đã lưu giao dịch thanh toán, chờ admin xác nhận');
+    }
+
+    // KHÔNG gửi thông báo Socket.IO cho webadmin ở đây
+    // Thông báo sẽ được gửi khi admin thực sự xác nhận cọc
+    console.log('✅ Đã lưu giao dịch, chờ admin xác nhận để gửi thông báo webadmin');
 
     res.json({
       success: true,

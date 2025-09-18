@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DEFAULT_API_URL } from '@/constants/api';
+import { useSocket } from '@/hooks/useSocket';
 
 const API_URL = DEFAULT_API_URL;
 
@@ -39,6 +40,7 @@ export default function IndexScreen() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [deletingNotification, setDeletingNotification] = useState<string | null>(null);
+  const socket = useSocket();
 
   useEffect(() => {
     checkLoginStatus();
@@ -49,6 +51,30 @@ export default function IndexScreen() {
       loadNotifications();
     }
   }, [userType, userInfo]);
+
+  // Socket.IO listeners
+  useEffect(() => {
+    if (!socket || userType !== 'customer') return;
+
+    // Lắng nghe thông báo mới
+    socket.on('new_notification', (data) => {
+      console.log('📱 Nhận thông báo mới:', data);
+      setNotifications(prev => [data, ...prev]);
+      setUnreadCount(prev => prev + 1);
+    });
+
+    // Lắng nghe thông báo cọc thành công
+    socket.on('payment_confirmed', (data) => {
+      console.log('💰 Nhận thông báo cọc thành công:', data);
+      // Reload notifications để cập nhật
+      loadNotifications();
+    });
+
+    return () => {
+      socket.off('new_notification');
+      socket.off('payment_confirmed');
+    };
+  }, [socket, userType]);
 
   const checkLoginStatus = async () => {
     try {
@@ -263,70 +289,106 @@ export default function IndexScreen() {
   // Giao diện cho nhân viên
   if (userType === 'employee') {
     return (
-      <ThemedView style={styles.container}>
+      <View style={styles.employeeContainer}>
         <Stack.Screen options={{ title: 'Nhân viên' }} />
         <ScrollView 
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.employeeScrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
         >
           {/* Header */}
           <View style={styles.employeeHeader}>
-            <View style={styles.userInfo}>
-              <Ionicons name="person-circle" size={40} color="#dc2626" />
-              <View style={styles.userDetails}>
-                <ThemedText type="subtitle" style={styles.userName}>
-                  {userInfo.fullName}
-                </ThemedText>
-                <ThemedText style={styles.userRole}>Nhân viên</ThemedText>
+            <View style={styles.employeeHeaderContent}>
+              <View style={styles.employeeGreetingSection}>
+                <ThemedText style={styles.employeeGreetingText}>Xin chào nhân viên</ThemedText>
+                <ThemedText style={styles.employeeNameText}>{userInfo.fullName}</ThemedText>
               </View>
+              <TouchableOpacity onPress={handleLogout} style={styles.employeeLogoutButton}>
+                <Ionicons name="log-out-outline" size={24} color="#fff" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <Ionicons name="log-out" size={20} color="#dc2626" />
-            </TouchableOpacity>
           </View>
 
-          {/* Employee Features */}
-          <View style={styles.featuresContainer}>
-            <ThemedText type="title" style={styles.featuresTitle}>
-              Quản lý nhà hàng
-            </ThemedText>
+          {/* Features Section */}
+          <View style={styles.employeeFeaturesSection}>
+            <ThemedText style={styles.employeeFeaturesTitle}>Tính năng</ThemedText>
             
-            {/* Feature 1: Đặt bàn cho khách */}
-            <TouchableOpacity 
-              style={[styles.featureCard, { backgroundColor: '#dc2626' }]}
-              onPress={() => router.push('/employee-bookings')}
-            >
-              <View style={styles.featureContent}>
-                <Ionicons name="restaurant" size={32} color="#fff" />
-                <View style={styles.featureText}>
-                  <ThemedText style={styles.featureTitle}>Đặt bàn cho khách</ThemedText>
-                  <ThemedText style={styles.featureDescription}>
-                    Quản lý booking của khách hàng
-                  </ThemedText>
+            <View style={styles.employeeFeaturesGrid}>
+              {/* Đặt bàn */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#FF6B6B' }]}
+                onPress={() => router.push('/employee-bookings')}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="restaurant" size={28} color="#fff" />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#fff" />
-              </View>
-            </TouchableOpacity>
+                <ThemedText style={styles.employeeFeatureTitle}>Đặt bàn</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Quản lý đặt bàn</ThemedText>
+              </TouchableOpacity>
 
-            {/* Feature 2: Thanh toán bàn */}
-            <TouchableOpacity 
-              style={[styles.featureCard, { backgroundColor: '#dc2626' }]}
-              onPress={() => router.push('/employee-payments')}
-            >
-              <View style={styles.featureContent}>
-                <Ionicons name="card" size={32} color="#fff" />
-                <View style={styles.featureText}>
-                  <ThemedText style={styles.featureTitle}>Thanh toán bàn</ThemedText>
-                  <ThemedText style={styles.featureDescription}>
-                    Quản lý thanh toán cho các bàn
-                  </ThemedText>
+              {/* Order */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#4ECDC4' }]}
+                onPress={() => router.push('/employee-payments')}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="receipt" size={28} color="#fff" />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#fff" />
-              </View>
-            </TouchableOpacity>
+                <ThemedText style={styles.employeeFeatureTitle}>Order</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Quản lý đơn hàng</ThemedText>
+              </TouchableOpacity>
+
+              {/* Thanh toán */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#45B7D1' }]}
+                onPress={() => router.push('/employee-payments')}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="card" size={28} color="#fff" />
+                </View>
+                <ThemedText style={styles.employeeFeatureTitle}>Thanh toán</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Xử lý thanh toán</ThemedText>
+              </TouchableOpacity>
+
+              {/* Thông báo */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#96CEB4' }]}
+                onPress={() => {}}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="notifications" size={28} color="#fff" />
+                </View>
+                <ThemedText style={styles.employeeFeatureTitle}>Thông báo</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Xem thông báo</ThemedText>
+              </TouchableOpacity>
+
+              {/* Chỉnh sửa profile */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#FECA57' }]}
+                onPress={() => {}}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="person" size={28} color="#fff" />
+                </View>
+                <ThemedText style={styles.employeeFeatureTitle}>Chỉnh sửa profile</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Cập nhật thông tin</ThemedText>
+              </TouchableOpacity>
+
+              {/* Thêm tính năng mở rộng */}
+              <TouchableOpacity 
+                style={[styles.employeeFeatureCard, { backgroundColor: '#A55EEA' }]}
+                onPress={() => {}}
+              >
+                <View style={styles.employeeFeatureIconWrapper}>
+                  <Ionicons name="settings" size={28} color="#fff" />
+                </View>
+                <ThemedText style={styles.employeeFeatureTitle}>Cài đặt</ThemedText>
+                <ThemedText style={styles.employeeFeatureSubtitle}>Tùy chỉnh hệ thống</ThemedText>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
-      </ThemedView>
+      </View>
     );
   }
 
@@ -339,38 +401,54 @@ export default function IndexScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Section */}
+        {/* Background Pattern */}
+        <View style={styles.backgroundPattern}>
+          <View style={styles.patternCircle1} />
+          <View style={styles.patternCircle2} />
+          <View style={styles.patternCircle3} />
+          <View style={styles.patternCircle4} />
+          <View style={styles.patternCircle5} />
+        </View>
+
+        {/* Hero Section - Integrated with green background */}
         <View style={styles.heroSection}>
-          <View style={styles.heroBackground}>
-            <View style={styles.heroContent}>
-              <View style={styles.welcomeText}>
-                <ThemedText style={styles.heroTitle}>Chào mừng,</ThemedText>
-                <ThemedText style={styles.heroSubtitle}>{userInfo.fullName}</ThemedText>
-                <ThemedText style={styles.heroDescription}>Khách hàng VIP</ThemedText>
+          <View style={styles.heroContent}>
+            <View style={styles.welcomeSection}>
+              <View style={styles.greetingContainer}>
+                <View style={styles.greetingTextContainer}>
+                  <ThemedText style={styles.heroGreeting}>Xin chào,</ThemedText>
+                  <ThemedText style={styles.heroName}>{userInfo.fullName}</ThemedText>
+                </View>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                  <Ionicons name="log-out-outline" size={24} color="#fff" />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                <Ionicons name="log-out" size={20} color="#fff" />
-              </TouchableOpacity>
             </View>
+            
           </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Redesigned */}
         <View style={styles.quickActionsSection}>
           <TouchableOpacity 
             style={styles.primaryAction}
             onPress={() => router.push('/select-guests')}
           >
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="restaurant" size={32} color="#fff" />
+            <View style={styles.actionGradient}>
+              <View style={styles.actionIconContainer}>
+                <Ionicons name="restaurant" size={32} color="#16a34a" />
+              </View>
+              <View style={styles.actionContent}>
+                <ThemedText style={styles.actionTitle}>ĐẶT BÀN NGAY</ThemedText>
+                <ThemedText style={styles.actionSubtitle}>Chọn bàn và món ăn yêu thích</ThemedText>
+              </View>
+              <View style={styles.actionArrow}>
+                <Ionicons name="arrow-forward" size={24} color="#16a34a" />
+              </View>
             </View>
-            <View style={styles.actionContent}>
-              <ThemedText style={styles.actionTitle}>ĐẶT BÀN NGAY</ThemedText>
-              <ThemedText style={styles.actionSubtitle}>Chọn bàn và món ăn</ThemedText>
-            </View>
-            <Ionicons name="arrow-forward" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
+
 
 
         {/* Notifications */}
@@ -428,11 +506,25 @@ export default function IndexScreen() {
                 >
                   <View style={styles.notificationHeader}>
                     <View style={styles.notificationIconContainer}>
-                      <Ionicons
-                        name="restaurant"
-                        size={20}
-                        color={item.isRead ? "#9ca3af" : "#16a34a"}
-                      />
+                      {item.type === 'deposit_pending_approval' ? (
+                        <Ionicons
+                          name="card"
+                          size={24}
+                          color={item.isRead ? "#9ca3af" : "#f59e0b"}
+                        />
+                      ) : item.type === 'deposit_confirmed' ? (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color={item.isRead ? "#9ca3af" : "#10b981"}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="restaurant"
+                          size={20}
+                          color={item.isRead ? "#9ca3af" : "#16a34a"}
+                        />
+                      )}
                     </View>
                     <View style={styles.notificationTextContent}>
                       <View style={styles.titleRow}>
@@ -460,35 +552,63 @@ export default function IndexScreen() {
                             styles.bookingText,
                             item.isRead && styles.readText
                           ]} numberOfLines={1}>
-                            🏷️ Bàn: {item.bookingId.table}
+                            🏷️ Bàn: {item.bookingId?.table || 'N/A'}
                           </ThemedText>
                           <ThemedText style={[
                             styles.bookingText,
                             item.isRead && styles.readText
                           ]} numberOfLines={1}>
-                            📅 {new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN')} lúc {item.bookingId.bookingTime}
+                            📅 {item.bookingId?.bookingDate ? new Date(item.bookingId.bookingDate).toLocaleDateString('vi-VN') : 'N/A'} lúc {item.bookingId?.bookingTime || 'N/A'}
                           </ThemedText>
                           <ThemedText style={[
                             styles.bookingAmount,
                             item.isRead && styles.readText
                           ]}>
-                            💰 {item.bookingId.totalAmount.toLocaleString('vi-VN')}đ
+                            💰 {item.bookingId?.totalAmount?.toLocaleString('vi-VN') || '0'}đ
                           </ThemedText>
                           {/* Trạng thái đặt bàn */}
+                          {item.type === 'deposit_pending_approval' && (
+                            <View style={styles.statusContainer}>
+                              <View style={styles.statusBadge}>
+                                <Ionicons name="time" size={16} color="#f59e0b" />
+                                <ThemedText style={[
+                                  styles.pendingStatus,
+                                  item.isRead && styles.readStatus
+                                ]}>ĐANG CHỜ XÁC NHẬN</ThemedText>
+                              </View>
+                            </View>
+                          )}
+                          {item.type === 'deposit_confirmed' && (
+                            <View style={styles.statusContainer}>
+                              <View style={styles.statusBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                                <ThemedText style={[
+                                  styles.confirmedStatus,
+                                  item.isRead && styles.readStatus
+                                ]}>XÁC NHẬN THÀNH CÔNG</ThemedText>
+                              </View>
+                            </View>
+                          )}
                           {item.type === 'booking_pending' && (
                             <View style={styles.statusContainer}>
-                              <ThemedText style={[
-                                styles.pendingStatus,
-                                item.isRead && styles.readStatus
-                              ]}>ĐANG CHỜ XÁC NHẬN</ThemedText>
+                              <View style={styles.statusBadge}>
+                                <Ionicons name="time" size={16} color="#f59e0b" />
+                                <ThemedText style={[
+                                  styles.pendingStatus,
+                                  item.isRead && styles.readStatus
+                                ]}>ĐANG CHỜ XÁC NHẬN</ThemedText>
+                              </View>
                             </View>
                           )}
                           {item.type === 'booking_confirmed' && (
                             <View style={styles.statusContainer}>
-                              <ThemedText style={[
-                                styles.confirmedStatus,
-                                item.isRead && styles.readStatus
-                              ]}>BÀN ĐÃ ĐƯỢC DUYỆT</ThemedText>
+                              <View style={styles.statusBadge}>
+                                <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                                <ThemedText style={[
+                                  styles.confirmedStatus,
+                                  item.isRead && styles.readStatus
+                                ]}>BÀN ĐÃ ĐƯỢC DUYỆT</ThemedText>
+                              </View>
                             </View>
                           )}
                         </View>
@@ -530,11 +650,22 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#16a34a',
+    position: 'relative',
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 20,
+    position: 'relative',
+  },
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.1,
+    zIndex: 0,
   },
   welcomeContainer: {
     flex: 1,
@@ -629,47 +760,146 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#dc2626',
   },
-  // Hero Section
+  // Hero Section - Redesigned
   heroSection: {
-    marginBottom: 20,
-  },
-  heroBackground: {
-    backgroundColor: '#16a34a',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    marginBottom: 24,
+    position: 'relative',
+    zIndex: 1,
     paddingTop: 20,
     paddingBottom: 30,
     paddingHorizontal: 20,
+  },
+  patternCircle1: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#fff',
+    top: 50,
+    right: -30,
+  },
+  patternCircle2: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fff',
+    top: 200,
+    right: 20,
+  },
+  patternCircle3: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#fff',
+    bottom: 200,
+    left: -20,
+  },
+  patternCircle4: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    top: 400,
+    left: 50,
+  },
+  patternCircle5: {
+    position: 'absolute',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#fff',
+    bottom: 100,
+    right: 100,
+  },
+  heroContent: {
+    position: 'relative',
+    zIndex: 1,
+  },
+  welcomeSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  greetingContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  greetingTextContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  heroGreeting: {
+    fontSize: 18,
+    color: '#fff',
+    opacity: 0.9,
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  heroName: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  restaurantInfoCard: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  heroContent: {
+  restaurantHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  welcomeText: {
+  restaurantLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  restaurantDetails: {
     flex: 1,
   },
-  heroTitle: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9,
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: 24,
+  restaurantName: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
+    color: '#16a34a',
+    marginBottom: 2,
   },
-  heroDescription: {
+  restaurantTagline: {
     fontSize: 14,
-    color: '#fff',
-    opacity: 0.8,
+    color: '#6b7280',
+  },
+  restaurantStats: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#16a34a',
+    fontWeight: '500',
   },
   customerHeader: {
     flexDirection: 'row',
@@ -702,38 +932,60 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 25,
+    minWidth: 50,
+    minHeight: 50,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   logoutText: {
     color: '#16a34a',
     fontSize: 14,
     fontWeight: '600',
   },
-  // Quick Actions
+  // Quick Actions - Redesigned
   quickActionsSection: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 24,
+    position: 'relative',
+    zIndex: 1,
   },
   primaryAction: {
-    backgroundColor: '#16a34a',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  actionGradient: {
+    backgroundColor: '#ffffff',
+    padding: 24,
     flexDirection: 'row',
     alignItems: 'center',
+    position: 'relative',
+    borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f0fdf4',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -742,15 +994,77 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#16a34a',
     marginBottom: 4,
   },
   actionSubtitle: {
-    fontSize: 14,
-    color: '#fff',
+    fontSize: 15,
+    color: '#6b7280',
     opacity: 0.9,
+  },
+  actionArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  // Features Section
+  featuresSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  featuresGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  featureCard: {
+    width: '47%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#f0fdf4',
+  },
+  featureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  featureTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#16a34a',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  featureDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 
   // Stats Section
@@ -861,7 +1175,7 @@ const styles = StyleSheet.create({
   },
   // Notification styles
   notificationsSection: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 16,
     padding: 20,
     marginHorizontal: 20,
@@ -871,6 +1185,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
+    zIndex: 1,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -987,15 +1303,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
+    flex: 1,
   },
   readBadge: {
     backgroundColor: '#e5e7eb',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 4,
+    marginLeft: 8,
+    flexShrink: 0,
   },
   readBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
     color: '#6b7280',
   },
@@ -1048,6 +1367,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignSelf: 'flex-start',
   },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   pendingStatus: {
     fontSize: 12,
     fontWeight: 'bold',
@@ -1062,6 +1386,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#16a34a',
     backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  depositStatus: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#f59e0b',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1091,5 +1424,94 @@ const styles = StyleSheet.create({
   viewAllText: {
     color: '#16a34a',
     fontWeight: '600',
+  },
+  // Employee UI Styles - Modern Colorful Theme
+  employeeContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  employeeScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  employeeHeader: {
+    backgroundColor: '#667eea',
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  employeeHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  employeeGreetingSection: {
+    flex: 1,
+  },
+  employeeGreetingText: {
+    fontSize: 16,
+    color: '#ffffff',
+    opacity: 0.9,
+    marginBottom: 4,
+  },
+  employeeNameText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  employeeLogoutButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  employeeFeaturesSection: {
+    paddingHorizontal: 20,
+    paddingTop: 30,
+  },
+  employeeFeaturesTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 20,
+  },
+  employeeFeaturesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  employeeFeatureCard: {
+    width: '47%',
+    padding: 20,
+    borderRadius: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  employeeFeatureIconWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  employeeFeatureTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  employeeFeatureSubtitle: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.8,
+    textAlign: 'center',
   },
 });

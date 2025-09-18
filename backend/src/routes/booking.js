@@ -136,31 +136,15 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await booking.save();
 
-    // Emit Socket.IO event for new booking
-    const io = req.app.get('io');
-    if (io) {
-      io.to('employees').emit('booking_status_changed', {
-        bookingId: booking._id,
-        tableId: booking.table,
-        tableName: table.name,
-        customerId: booking.customer,
-        customerName: booking.customerInfo?.fullName || 'N/A',
-        status: 'pending',
-        numberOfGuests: booking.numberOfGuests,
-        bookingDate: booking.bookingDate,
-        bookingTime: booking.bookingTime,
-        totalAmount: booking.totalAmount,
-        depositAmount: booking.depositAmount,
-        timestamp: new Date()
-      });
-    }
+    // Không tạo thông báo khi tạo booking
+    // Thông báo sẽ được tạo khi khách hàng cọc tiền thành công
 
-    // KHÔNG gửi thông báo ngay khi tạo booking có cọc
-    // Thông báo chỉ được gửi sau khi cọc thành công
-    console.log('Booking đã được tạo, chờ thanh toán cọc để gửi thông báo');
+    // KHÔNG gửi thông báo cho webadmin khi tạo booking
+    // Thông báo sẽ được gửi khi khách hàng thực sự thanh toán cọc hoặc admin xác nhận
+    console.log('✅ Đã tạo booking, chờ thanh toán cọc để gửi thông báo webadmin');
 
     res.status(201).json({
-      message: 'Đặt bàn thành công, vui lòng thanh toán cọc',
+      message: 'Đặt bàn đã được tạo, vui lòng thanh toán cọc để xác nhận',
       booking: {
         id: booking._id,
         tableName: table.name,
@@ -169,7 +153,8 @@ router.post('/', authenticateToken, async (req, res) => {
         bookingTime: booking.bookingTime,
         totalAmount: booking.totalAmount,
         depositAmount: booking.depositAmount,
-        status: booking.status
+        status: booking.status,
+        requiresDeposit: true
       }
     });
   } catch (error) {
@@ -196,10 +181,26 @@ router.get('/my-bookings', authenticateToken, async (req, res) => {
 // Lấy danh sách booking cho admin/nhân viên
 router.get('/admin', async (req, res) => {
   try {
+    console.log('GET /api/bookings/admin - Headers:', req.headers);
+    console.log('GET /api/bookings/admin - Query:', req.query);
+    
     const { status = 'pending', page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    const query = status === 'all' ? {} : { status };
+    let query = status === 'all' ? {} : { status };
+    
+    // Nếu status là 'pending', chỉ hiển thị booking đã cọc tiền
+    if (status === 'pending') {
+      const TransactionHistory = require('../models/TransactionHistory');
+      const bookingsWithDeposit = await TransactionHistory.distinct('bookingId', {
+        transactionType: 'deposit',
+        status: 'completed'
+      });
+      query = { 
+        status: 'pending',
+        _id: { $in: bookingsWithDeposit }
+      };
+    }
     
     const bookings = await Booking.find(query)
       .populate('customer', 'fullName email phone')
@@ -209,15 +210,24 @@ router.get('/admin', async (req, res) => {
         model: 'Menu',
         select: 'name price'
       })
-      .populate('confirmedBy', 'fullName')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Xử lý confirmedBy field thủ công để tránh lỗi ObjectId
+    const processedBookings = bookings.map(booking => {
+      const bookingObj = booking.toObject();
+      if (bookingObj.confirmedBy && typeof bookingObj.confirmedBy === 'string') {
+        // Nếu confirmedBy là string, giữ nguyên
+        bookingObj.confirmedBy = { fullName: bookingObj.confirmedBy };
+      }
+      return bookingObj;
+    });
+
     const total = await Booking.countDocuments(query);
 
     res.json({
-      bookings,
+      bookings: processedBookings,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -268,18 +278,18 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
       table.status = 'occupied';
       await table.save();
       
-      // Emit Socket.IO event for table status change
-      const io = req.app.get('io');
-      if (io) {
-        io.emit('table_status_changed', {
-          tableId: table._id,
-          tableName: table.name,
-          status: 'occupied',
-          bookingId: booking._id,
-          customerName: booking.customerInfo?.fullName || 'N/A',
-          timestamp: new Date()
-        });
-      }
+      // TẠM THỜI ẨN: Emit Socket.IO event for table status change
+      // const io = req.app.get('io');
+      // if (io) {
+      //   io.emit('table_status_changed', {
+      //     tableId: table._id,
+      //     tableName: table.name,
+      //     status: 'occupied',
+      //     bookingId: booking._id,
+      //     customerName: booking.customerInfo?.fullName || 'N/A',
+      //     timestamp: new Date()
+      //   });
+      // }
     }
 
     // Tạo lịch sử giao dịch nếu có cọc tiền
@@ -314,20 +324,20 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
       }
     }
 
-    // Tạo thông báo cho khách hàng - chỉ gửi nếu có cọc tiền
-    if (booking.depositAmount > 0) {
+    // Tạo thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng
+    try {
       const customerNotification = new Notification({
         user: booking.customer,
         type: 'booking_confirmed',
-        title: '🎉 Đặt bàn đã được xác nhận!',
-        message: `Bàn ${table ? table.name : 'N/A'} đã được xác nhận cho ngày ${booking.bookingDate.toLocaleDateString('vi-VN')} lúc ${booking.bookingTime}. Số tiền cọc: ${booking.depositAmount.toLocaleString()}đ (${paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}). Bạn có thể thanh toán khi đến nhà hàng.`,
+        title: '🎉 BÀN ĐÃ ĐƯỢC DUYỆT!',
+        message: `${table ? table.name : 'N/A'} đã được admin xác nhận cho ngày ${booking.bookingDate.toLocaleDateString('vi-VN')} lúc ${booking.bookingTime}. ${booking.depositAmount > 0 ? `Số tiền cọc: ${booking.depositAmount.toLocaleString()}đ (${paymentMethod === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}). ` : ''}Bạn có thể đến quán đúng giờ.`,
         bookingId: booking._id,
         isRead: false
       });
       await customerNotification.save();
-      console.log('✅ Đã gửi thông báo xác nhận cọc cho khách hàng');
-    } else {
-      console.log('ℹ️ Không có cọc tiền, không gửi thông báo cho khách hàng');
+      console.log('✅ Đã gửi thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng');
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo xác nhận cho khách hàng:', notificationError);
     }
 
     // Gửi thông báo cho nhân viên khác về việc xác nhận
@@ -338,8 +348,8 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
         const employeeNotification = new Notification({
           user: employee._id,
           type: 'booking_confirmed',
-          title: 'Đặt bàn đã được xác nhận',
-          message: `Đặt bàn của khách hàng ${booking.customerInfo ? booking.customerInfo.fullName : 'N/A'} tại bàn ${table ? table.name : 'N/A'} đã được xác nhận bởi nhân viên.`,
+          title: '✅ BÀN ĐÃ ĐƯỢC DUYỆT',
+          message: `Khách hàng ${booking.customerInfo ? booking.customerInfo.fullName : 'N/A'} đã được duyệt ${table ? table.name : 'N/A'} cho ngày ${booking.bookingDate.toLocaleDateString('vi-VN')} lúc ${booking.bookingTime}. ${booking.depositAmount > 0 ? `Cọc: ${booking.depositAmount.toLocaleString()}đ` : ''}`,
           bookingId: booking._id,
           isRead: false
         });
@@ -360,8 +370,8 @@ router.post('/:id/confirm', authenticateToken, async (req, res) => {
         const adminNotification = new Notification({
           user: admin._id,
           type: 'booking_confirmed',
-          title: 'Nhân viên đã xác nhận đặt bàn',
-          message: `NHÂN VIÊN ${req.user.fullName || 'Nhân viên'} đã xác nhận đặt bàn cho KHÁCH ${booking.customerInfo ? booking.customerInfo.fullName : 'N/A'} với thông tin: Bàn ${table ? table.name : 'N/A'}, ${booking.numberOfGuests} người, ${booking.bookingDate.toLocaleDateString('vi-VN')} ${booking.bookingTime}, Tổng: ${booking.totalAmount.toLocaleString('vi-VN')}đ`,
+          title: '✅ BÀN ĐÃ ĐƯỢC DUYỆT',
+          message: `Nhân viên ${req.user.fullName || 'Nhân viên'} đã duyệt bàn ${table ? table.name : 'N/A'} cho khách ${booking.customerInfo ? booking.customerInfo.fullName : 'N/A'} (${booking.numberOfGuests} người) - ${booking.bookingDate.toLocaleDateString('vi-VN')} ${booking.bookingTime}. ${booking.depositAmount > 0 ? `Cọc: ${booking.depositAmount.toLocaleString()}đ` : ''}`,
           bookingId: booking._id,
           isRead: false
         });
@@ -463,8 +473,21 @@ router.get('/stats', async (req, res) => {
     thisMonth.setDate(1);
     thisMonth.setHours(0, 0, 0, 0);
 
+    // Import TransactionHistory model để kiểm tra booking đã cọc tiền
+    const TransactionHistory = require('../models/TransactionHistory');
+
+    // Tìm các booking đã có giao dịch cọc tiền
+    const bookingsWithDeposit = await TransactionHistory.distinct('bookingId', {
+      transactionType: 'deposit',
+      status: 'completed'
+    });
+
     const stats = await Promise.all([
-      Booking.countDocuments({ status: 'pending' }),
+      // Chỉ đếm booking pending VÀ đã cọc tiền
+      Booking.countDocuments({ 
+        status: 'pending',
+        _id: { $in: bookingsWithDeposit }
+      }),
       Booking.countDocuments({ status: 'confirmed' }),
       Booking.countDocuments({ 
         status: 'confirmed', 
@@ -491,6 +514,52 @@ router.get('/stats', async (req, res) => {
 // Test route
 router.get('/test', (req, res) => {
   res.json({ message: 'API bookings hoạt động!' });
+});
+
+// Debug route để kiểm tra stats
+router.get('/debug-stats', async (req, res) => {
+  try {
+    const TransactionHistory = require('../models/TransactionHistory');
+    
+    // Tìm tất cả booking pending
+    const allPendingBookings = await Booking.find({ status: 'pending' });
+    
+    // Tìm các booking đã có giao dịch cọc tiền
+    const bookingsWithDeposit = await TransactionHistory.distinct('bookingId', {
+      transactionType: 'deposit',
+      status: 'completed'
+    });
+    
+    // Tìm booking pending đã cọc tiền
+    const pendingWithDeposit = await Booking.find({
+      status: 'pending',
+      _id: { $in: bookingsWithDeposit }
+    });
+    
+    res.json({
+      allPendingBookings: allPendingBookings.length,
+      bookingsWithDeposit: bookingsWithDeposit.length,
+      pendingWithDeposit: pendingWithDeposit.length,
+      allPendingBookingsList: allPendingBookings.map(b => ({
+        id: b._id,
+        customer: b.customerInfo?.fullName,
+        table: b.table,
+        deposit: b.depositAmount,
+        createdAt: b.createdAt
+      })),
+      bookingsWithDepositList: bookingsWithDeposit,
+      pendingWithDepositList: pendingWithDeposit.map(b => ({
+        id: b._id,
+        customer: b.customerInfo?.fullName,
+        table: b.table,
+        deposit: b.depositAmount,
+        createdAt: b.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Lỗi debug stats:', error);
+    res.status(500).json({ message: 'Lỗi server', error: error.message });
+  }
 });
 
 // Lấy danh sách booking cho nhân viên (không cần xác thực customer)
@@ -601,8 +670,262 @@ router.post('/:bookingId/complete', authenticateToken, async (req, res) => {
   }
 });
 
-// Xác nhận thanh toán cọc
-router.post('/:bookingId/confirm-deposit', async (req, res) => {
+// Xác nhận thanh toán cọc Facebook (chỉ admin)
+router.post('/:bookingId/confirm-facebook-deposit', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    // Tìm booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    // Cập nhật trạng thái booking thành confirmed (đã cọc Facebook)
+    booking.status = 'confirmed';
+    booking.confirmedBy = req.user?.id || 'admin';
+    booking.confirmedAt = new Date();
+    await booking.save();
+
+    // Cập nhật trạng thái bàn thành occupied
+    const table = await Table.findById(booking.table);
+    if (table) {
+      table.status = 'occupied';
+      await table.save();
+    }
+
+    // Tạo lịch sử giao dịch
+    try {
+      const transaction = new TransactionHistory({
+        bookingId: booking._id,
+        tableId: booking.table,
+        tableName: table?.name || `Bàn ${booking.table}`,
+        customerId: booking.customer,
+        customerInfo: booking.customerInfo,
+        transactionType: 'deposit',
+        amount: booking.depositAmount || 0,
+        paymentMethod: 'facebook',
+        status: 'completed',
+        transactionId: 'FB_' + Date.now(),
+        paidAt: new Date(),
+        confirmedAt: new Date(),
+        notes: `Thanh toán cọc Facebook bàn ${table?.name || booking.table}`
+      });
+
+      await transaction.save();
+      console.log('✅ Đã tạo lịch sử giao dịch cọc Facebook:', transaction._id);
+    } catch (transactionError) {
+      console.error('Lỗi tạo lịch sử giao dịch:', transactionError);
+    }
+
+    // Tạo thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng
+    try {
+      if (booking.customer) {
+        const customerNotification = new Notification({
+          user: booking.customer,
+          type: 'deposit_confirmed',
+          title: '🎉 XÁC NHẬN THÀNH CÔNG ĐƠN ĐẶT BÀN',
+          message: `Xác nhận thành công đơn đặt bàn - Cọc qua Facebook`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await customerNotification.save();
+        console.log('✅ Đã gửi thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng');
+      }
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo xác nhận cọc Facebook:', notificationError);
+    }
+
+    // Gửi thông báo cho tất cả nhân viên về cọc Facebook thành công
+    try {
+      const employees = await Employee.find({});
+      
+      for (const employee of employees) {
+        const notification = new Notification({
+          user: employee._id,
+          type: 'deposit_confirmed',
+          title: '✅ BÀN ĐÃ ĐƯỢC DUYỆT - CỌC FACEBOOK',
+          message: `Khách hàng ${booking.customerInfo?.fullName || 'N/A'} đã được duyệt ${table?.name || 'N/A'} với cọc Facebook ${booking.depositAmount?.toLocaleString() || '0'}đ vào ${booking.bookingDate} lúc ${booking.bookingTime}. Vui lòng chuẩn bị bàn.`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await notification.save();
+      }
+      
+      console.log(`Đã gửi thông báo cọc Facebook thành công cho ${employees.length} nhân viên`);
+    } catch (employeeNotificationError) {
+      console.error('Lỗi gửi thông báo cho nhân viên:', employeeNotificationError);
+    }
+
+    // TẠM THỜI ẨN: Gửi thông báo Socket.IO real-time cho webadmin
+    // try {
+    //   const io = req.app.get('io');
+    //   if (io) {
+    //     // Gửi thông báo deposit_booking_created cho webadmin khi admin xác nhận cọc Facebook
+    //     io.to('employees').emit('deposit_booking_created', {
+    //       bookingId: booking._id,
+    //       tableId: booking.table,
+    //       tableName: table?.name || 'N/A',
+    //       customerName: booking.customerInfo?.fullName || 'N/A',
+    //       depositAmount: booking.depositAmount || 0,
+    //       bookingDate: booking.bookingDate,
+    //       bookingTime: booking.bookingTime,
+    //       message: `Admin đã xác nhận cọc Facebook ${booking.depositAmount?.toLocaleString() || '0'}đ cho bàn ${table?.name || 'N/A'} - ${booking.customerInfo?.fullName || 'N/A'}`,
+    //       timestamp: new Date()
+    //     });
+    //     
+    //     console.log('📢 Đã gửi thông báo Socket.IO cho webadmin về việc xác nhận cọc Facebook');
+    //   }
+    // } catch (socketError) {
+    //   console.error('Lỗi gửi thông báo Socket.IO:', socketError);
+    // }
+
+    res.json({
+      success: true,
+      message: 'Xác nhận thanh toán cọc Facebook thành công',
+      booking: {
+        id: booking._id,
+        status: booking.status,
+        depositAmount: booking.depositAmount
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi xác nhận thanh toán cọc Facebook:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Xác nhận thanh toán cọc QR code (chỉ admin)
+router.post('/:bookingId/confirm-qr-deposit', authenticateToken, async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    // Tìm booking
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    // Cập nhật trạng thái booking thành confirmed (đã cọc QR)
+    booking.status = 'confirmed';
+    booking.confirmedBy = req.user?.id || 'admin';
+    booking.confirmedAt = new Date();
+    await booking.save();
+
+    // Cập nhật trạng thái bàn thành occupied
+    const table = await Table.findById(booking.table);
+    if (table) {
+      table.status = 'occupied';
+      await table.save();
+    }
+
+    // Tạo lịch sử giao dịch
+    try {
+      const transaction = new TransactionHistory({
+        bookingId: booking._id,
+        tableId: booking.table,
+        tableName: table?.name || `Bàn ${booking.table}`,
+        customerId: booking.customer,
+        customerInfo: booking.customerInfo,
+        transactionType: 'deposit',
+        amount: booking.depositAmount || 0,
+        paymentMethod: 'qr_code',
+        status: 'completed',
+        transactionId: 'QR_' + Date.now(),
+        paidAt: new Date(),
+        confirmedAt: new Date(),
+        notes: `Thanh toán cọc QR code bàn ${table?.name || booking.table}`
+      });
+
+      await transaction.save();
+      console.log('✅ Đã tạo lịch sử giao dịch cọc QR code:', transaction._id);
+    } catch (transactionError) {
+      console.error('Lỗi tạo lịch sử giao dịch:', transactionError);
+    }
+
+    // Tạo thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng
+    try {
+      if (booking.customer) {
+        const customerNotification = new Notification({
+          user: booking.customer,
+          type: 'deposit_confirmed',
+          title: '🎉 XÁC NHẬN THÀNH CÔNG ĐƠN ĐẶT BÀN',
+          message: `Xác nhận thành công đơn đặt bàn - Cọc qua QR code`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await customerNotification.save();
+        console.log('✅ Đã gửi thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng');
+      }
+    } catch (notificationError) {
+      console.error('Lỗi gửi thông báo xác nhận cọc QR code:', notificationError);
+    }
+
+    // Gửi thông báo cho tất cả nhân viên về cọc QR code thành công
+    try {
+      const employees = await Employee.find({});
+      
+      for (const employee of employees) {
+        const notification = new Notification({
+          user: employee._id,
+          type: 'deposit_confirmed',
+          title: '✅ BÀN ĐÃ ĐƯỢC DUYỆT - CỌC QR CODE',
+          message: `Khách hàng ${booking.customerInfo?.fullName || 'N/A'} đã được duyệt ${table?.name || 'N/A'} với cọc QR code ${booking.depositAmount?.toLocaleString() || '0'}đ vào ${booking.bookingDate} lúc ${booking.bookingTime}. Vui lòng chuẩn bị bàn.`,
+          bookingId: booking._id,
+          isRead: false
+        });
+        
+        await notification.save();
+      }
+      
+      console.log(`Đã gửi thông báo cọc QR code thành công cho ${employees.length} nhân viên`);
+    } catch (employeeNotificationError) {
+      console.error('Lỗi gửi thông báo cho nhân viên:', employeeNotificationError);
+    }
+
+    // TẠM THỜI ẨN: Gửi thông báo Socket.IO real-time cho webadmin
+    // try {
+    //   const io = req.app.get('io');
+    //   if (io) {
+    //     // Gửi thông báo deposit_booking_created cho webadmin khi admin xác nhận cọc QR code
+    //     io.to('employees').emit('deposit_booking_created', {
+    //       bookingId: booking._id,
+    //       tableId: booking.table,
+    //       tableName: table?.name || 'N/A',
+    //       customerName: booking.customerInfo?.fullName || 'N/A',
+    //       depositAmount: booking.depositAmount || 0,
+    //       bookingDate: booking.bookingDate,
+    //       bookingTime: booking.bookingTime,
+    //       message: `Admin đã xác nhận cọc QR code ${booking.depositAmount?.toLocaleString() || '0'}đ cho bàn ${table?.name || 'N/A'} - ${booking.customerInfo?.fullName || 'N/A'}`,
+    //       timestamp: new Date()
+    //     });
+    //     
+    //     console.log('📢 Đã gửi thông báo Socket.IO cho webadmin về việc xác nhận cọc QR code');
+    //   }
+    // } catch (socketError) {
+    //   console.error('Lỗi gửi thông báo Socket.IO:', socketError);
+    // }
+
+    res.json({
+      success: true,
+      message: 'Xác nhận thanh toán cọc QR code thành công',
+      booking: {
+        id: booking._id,
+        status: booking.status,
+        depositAmount: booking.depositAmount
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi xác nhận thanh toán cọc QR code:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Xác nhận thanh toán cọc (chỉ admin)
+router.post('/:bookingId/confirm-deposit', authenticateToken, async (req, res) => {
   try {
     const { bookingId } = req.params;
     
@@ -655,20 +978,20 @@ router.post('/:bookingId/confirm-deposit', async (req, res) => {
       console.error('Lỗi tạo lịch sử giao dịch:', transactionError);
     }
 
-    // Tạo thông báo cho khách hàng
+    // Tạo thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng
     try {
       if (booking.customer) {
         const customerNotification = new Notification({
           user: booking.customer,
-          type: 'booking_confirmed',
-          title: '🎉 Đặt bàn đã được xác nhận!',
-          message: `Bàn ${table?.name || 'N/A'} đã được cọc ${booking.depositAmount?.toLocaleString() || '0'}đ. Bạn có thể đến quán vào ${booking.bookingDate} lúc ${booking.bookingTime}.`,
+          type: 'deposit_confirmed',
+          title: '🎉 XÁC NHẬN THÀNH CÔNG ĐƠN ĐẶT BÀN',
+          message: `Xác nhận thành công đơn đặt bàn`,
           bookingId: booking._id,
           isRead: false
         });
         
         await customerNotification.save();
-        console.log('Đã gửi thông báo xác nhận cọc cho khách hàng');
+        console.log('✅ Đã gửi thông báo "BÀN ĐÃ ĐƯỢC DUYỆT" cho khách hàng');
       }
     } catch (notificationError) {
       console.error('Lỗi gửi thông báo xác nhận cọc:', notificationError);
@@ -682,8 +1005,8 @@ router.post('/:bookingId/confirm-deposit', async (req, res) => {
         const notification = new Notification({
           user: employee._id,
           type: 'deposit_confirmed',
-          title: '💰 Cọc thành công - Cần xác nhận bàn',
-          message: `Khách hàng ${booking.customerInfo?.fullName || 'N/A'} đã cọc ${booking.depositAmount?.toLocaleString() || '0'}đ cho bàn ${table?.name || 'N/A'} vào ${booking.bookingDate} lúc ${booking.bookingTime}. Vui lòng chuẩn bị bàn.`,
+          title: '✅ BÀN ĐÃ ĐƯỢC DUYỆT',
+          message: `Khách hàng ${booking.customerInfo?.fullName || 'N/A'} đã được duyệt ${table?.name || 'N/A'} với cọc ${booking.depositAmount?.toLocaleString() || '0'}đ vào ${booking.bookingDate} lúc ${booking.bookingTime}. Vui lòng chuẩn bị bàn.`,
           bookingId: booking._id,
           isRead: false
         });
@@ -695,6 +1018,29 @@ router.post('/:bookingId/confirm-deposit', async (req, res) => {
     } catch (employeeNotificationError) {
       console.error('Lỗi gửi thông báo cho nhân viên:', employeeNotificationError);
     }
+
+    // TẠM THỜI ẨN: Gửi thông báo Socket.IO real-time cho webadmin
+    // try {
+    //   const io = req.app.get('io');
+    //   if (io) {
+    //     // Gửi thông báo deposit_booking_created cho webadmin khi admin xác nhận cọc
+    //     io.to('employees').emit('deposit_booking_created', {
+    //       bookingId: booking._id,
+    //       tableId: booking.table,
+    //       tableName: table?.name || 'N/A',
+    //       customerName: booking.customerInfo?.fullName || 'N/A',
+    //       depositAmount: booking.depositAmount || 0,
+    //       bookingDate: booking.bookingDate,
+    //       bookingTime: booking.bookingTime,
+    //       message: `Admin đã xác nhận cọc ${booking.depositAmount?.toLocaleString() || '0'}đ cho bàn ${table?.name || 'N/A'} - ${booking.customerInfo?.fullName || 'N/A'}`,
+    //       timestamp: new Date()
+    //     });
+    //     
+    //     console.log('📢 Đã gửi thông báo Socket.IO cho webadmin về việc xác nhận cọc');
+    //   }
+    // } catch (socketError) {
+    //   console.error('Lỗi gửi thông báo Socket.IO:', socketError);
+    // }
 
     res.json({
       success: true,
@@ -868,7 +1214,7 @@ router.post('/admin-quick-booking', async (req, res) => {
           user: foundCustomer._id,
           type: 'booking_confirmed',
           title: '🎉 Admin đã đặt bàn cho bạn!',
-          message: `Chào ${foundCustomer.fullName}! Admin đã đặt bàn ${table.name} cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
+          message: `Chào ${foundCustomer.fullName}! Admin đã đặt ${table.name} cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
           bookingId: booking._id,
           isRead: false
         });
@@ -881,7 +1227,7 @@ router.post('/admin-quick-booking', async (req, res) => {
           user: null, // null = thông báo chung cho tất cả khách hàng
           type: 'booking_pending',
           title: 'Đặt bàn thành công!',
-          message: `Bàn ${table.name} đã được đặt cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
+          message: `${table.name} đã được đặt cho ${numberOfGuests} người vào ${bookingDate} lúc ${bookingTime}. ${parsedDepositAmount > 0 ? `Số tiền cọc: ${parsedDepositAmount.toLocaleString()}đ. ` : ''}${specialRequests ? `Yêu cầu đặc biệt: ${specialRequests}` : ''}`,
           bookingId: booking._id,
           isRead: false
         });

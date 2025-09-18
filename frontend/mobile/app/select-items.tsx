@@ -25,7 +25,9 @@ export default function SelectItemsScreen() {
         setError(null);
         const res = await fetch(`${API_URL}/api/menu`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const response = await res.json();
+        // API trả về { data: [...], pagination: {...} }
+        const data = response.data || response;
         const mapped = (Array.isArray(data) ? data : []).map((m: any) => ({
           id: String(m._id ?? m.id),
           name: String(m.name ?? ''),
