@@ -33,7 +33,7 @@ type PaymentTable = {
 };
 
 export default function PaymentsAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [tables, setTables] = useState<PaymentTable[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'occupied' | 'empty'>('occupied');

@@ -49,7 +49,7 @@ type Menu = {
   ingredients?: Ingredient[];
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
 
 // Axios interceptor để xử lý lỗi 401
 axios.interceptors.response.use(
@@ -823,7 +823,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -1010,7 +1010,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1288,7 +1288,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -2391,7 +2391,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');

@@ -6,7 +6,7 @@ const TableHistorySchema = new mongoose.Schema(
     tableName: { type: String, required: true },
     action: { 
       type: String, 
-      enum: ['OCCUPIED', 'FREED', 'PAID'], 
+      enum: ['OCCUPIED', 'FREED', 'PAID', 'RETURNED'], 
       required: true 
     },
     performedBy: { 
@@ -23,6 +23,7 @@ const TableHistorySchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('TableHistory', TableHistorySchema);
+
 
 
 

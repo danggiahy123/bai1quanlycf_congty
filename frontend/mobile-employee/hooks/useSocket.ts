@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SOCKET_URL = 'http://192.168.5.162:5000';
+const SOCKET_URL = 'http://192.168.1.6:5000';
 
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null);
