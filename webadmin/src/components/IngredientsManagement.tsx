@@ -4,7 +4,7 @@ import { Dialog } from '@headlessui/react';
 import { PencilSquareIcon, TrashIcon, PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
-const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 interface Ingredient {
   _id: string;

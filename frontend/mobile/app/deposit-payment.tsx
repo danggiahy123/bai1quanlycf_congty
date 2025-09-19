@@ -249,15 +249,19 @@ export default function DepositPaymentScreen() {
           ]
         );
       } else if (result.success === true) {
-        // Trường hợp hiếm khi API trả về true (có thể do lỗi backend)
+        // API trả về success=true nhưng chưa thanh toán (bình thường)
         setCheckingPayment(false);
         setPaymentStatus('pending');
-        console.log('⚠️ API trả về success=true, có thể là lỗi backend');
+        console.log('ℹ️ API trả về success=true, chưa phát hiện thanh toán');
         Alert.alert(
-          '⚠️ LỖI HỆ THỐNG',
-          'API trả về kết quả không mong đợi.\n\n' +
-          'Vui lòng xác nhận thanh toán thủ công.',
+          '⏳ CHƯA PHÁT HIỆN THANH TOÁN',
+          'Hệ thống chưa phát hiện giao dịch thanh toán.\n\n' +
+          'Vui lòng:\n' +
+          '1. Kiểm tra lại giao dịch chuyển khoản\n' +
+          '2. Đợi vài phút rồi thử lại\n' +
+          '3. Hoặc xác nhận thanh toán thủ công',
           [
+            { text: 'Thử lại', onPress: () => checkPaymentAutomatically() },
             { text: 'Xác nhận thủ công', onPress: () => confirmPaymentManually() },
             { text: 'Hủy', style: 'cancel' }
           ]

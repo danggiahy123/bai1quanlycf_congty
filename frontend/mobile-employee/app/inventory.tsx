@@ -3,481 +3,480 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
-  RefreshControl,
   Alert,
+  RefreshControl,
   Modal,
   TextInput,
-  ScrollView,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { tryApiCall } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 interface Ingredient {
   _id: string;
   name: string;
-  category: string;
   currentStock: number;
   minStockLevel: number;
-  maxStockLevel: number;
   unit: string;
   unitPrice: number;
-  isActive: boolean;
-  description?: string;
+  category: string;
+  supplier?: string;
 }
 
-interface StockAdjustment {
-  ingredientId: string;
+interface InventoryTransaction {
+  _id: string;
+  ingredient: Ingredient;
+  transactionType: 'import' | 'export';
   quantity: number;
-  operation: 'add' | 'subtract';
+  unitPrice: number;
+  totalAmount: number;
   reason: string;
-  notes?: string;
+  department: string;
+  createdAt: string;
 }
 
 export default function InventoryScreen() {
+  const router = useRouter();
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all');
-  const [searchText, setSearchText] = useState('');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'ingredients' | 'transactions'>('overview');
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-  const [adjustmentForm, setAdjustmentForm] = useState<StockAdjustment>({
-    ingredientId: '',
-    quantity: 0,
-    operation: 'add',
+  const [transactionForm, setTransactionForm] = useState({
+    quantity: '',
+    unitPrice: '',
     reason: '',
-    notes: '',
+    department: 'Kitchen',
   });
 
-  const loadIngredients = async () => {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       
       if (!token) {
         Alert.alert('Lỗi', 'Vui lòng đăng nhập lại');
+        router.replace('/login');
         return;
       }
 
-      const result = await tryApiCall('/api/ingredients', {
+      // Load ingredients
+      const ingredientsResult = await tryApiCall('/api/ingredients', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
-      if (result.success) {
-        setIngredients(result.data.ingredients || []);
-      } else {
-        throw new Error(result.error || 'Không thể tải dữ liệu');
+      // Load recent transactions
+      const transactionsResult = await tryApiCall('/api/inventory-transactions/recent', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (ingredientsResult.success) {
+        setIngredients(ingredientsResult.data || []);
+      }
+
+      if (transactionsResult.success) {
+        setTransactions(transactionsResult.data || []);
       }
     } catch (error) {
-      console.error('Error loading ingredients:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách nguyên liệu');
-      setIngredients([]);
+      console.error('Error loading inventory data:', error);
+      Alert.alert('Lỗi', 'Không thể tải dữ liệu kho');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const adjustStock = async () => {
-    if (!adjustmentForm.ingredientId || adjustmentForm.quantity <= 0) {
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const handleTransaction = async (type: 'import' | 'export') => {
+    if (!selectedIngredient) return;
+
+    if (!transactionForm.quantity || !transactionForm.unitPrice || !transactionForm.reason) {
       Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin');
       return;
     }
 
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/ingredients/${adjustmentForm.ingredientId}/update-stock`, {
+      
+      const transactionData = {
+        ingredient: selectedIngredient._id,
+        transactionType: type,
+        quantity: parseInt(transactionForm.quantity),
+        unitPrice: parseFloat(transactionForm.unitPrice),
+        totalAmount: parseInt(transactionForm.quantity) * parseFloat(transactionForm.unitPrice),
+        reason: transactionForm.reason,
+        department: transactionForm.department,
+      };
+
+      const result = await tryApiCall('/api/inventory-transactions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          quantity: adjustmentForm.quantity,
-          operation: adjustmentForm.operation,
-          reason: adjustmentForm.reason,
-          notes: adjustmentForm.notes,
-        }),
+        body: JSON.stringify(transactionData),
       });
 
       if (result.success) {
-        Alert.alert('Thành công', 'Đã cập nhật tồn kho');
-        setShowAdjustmentModal(false);
-        setAdjustmentForm({
-          ingredientId: '',
-          quantity: 0,
-          operation: 'add',
-          reason: '',
-          notes: '',
-        });
-        loadIngredients();
+        Alert.alert(
+          'Thành công',
+          `${type === 'import' ? 'Nhập' : 'Xuất'} kho thành công`,
+          [{ text: 'OK', onPress: () => {
+            setShowTransactionModal(false);
+            setTransactionForm({ quantity: '', unitPrice: '', reason: '', department: 'Kitchen' });
+            setSelectedIngredient(null);
+            loadData();
+          }}]
+        );
       } else {
-        Alert.alert('Lỗi', result.error || 'Không thể cập nhật tồn kho');
+        Alert.alert('Lỗi', result.message || 'Không thể thực hiện giao dịch');
       }
     } catch (error) {
-      console.error('Error adjusting stock:', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật tồn kho');
+      console.error('Error processing transaction:', error);
+      Alert.alert('Lỗi', 'Không thể thực hiện giao dịch');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const openAdjustmentModal = (ingredient: Ingredient) => {
-    setSelectedIngredient(ingredient);
-    setAdjustmentForm({
-      ingredientId: ingredient._id,
-      quantity: 0,
-      operation: 'add',
-      reason: '',
-      notes: '',
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
-    setShowAdjustmentModal(true);
   };
 
   const getStockStatus = (ingredient: Ingredient) => {
-    if (ingredient.currentStock === 0) return 'out';
-    if (ingredient.currentStock <= ingredient.minStockLevel) return 'low';
-    return 'normal';
+    if (ingredient.currentStock === 0) return { status: 'out', color: '#F44336', text: 'Hết hàng' };
+    if (ingredient.currentStock <= ingredient.minStockLevel) return { status: 'low', color: '#FF9800', text: 'Sắp hết' };
+    return { status: 'good', color: '#4CAF50', text: 'Đủ hàng' };
   };
 
-  const getStockStatusColor = (status: string) => {
-    switch (status) {
-      case 'out': return Colors.light.error;
-      case 'low': return Colors.light.warning;
-      case 'normal': return Colors.light.success;
-      default: return Colors.light.icon;
-    }
-  };
+  const lowStockItems = ingredients.filter(ing => ing.currentStock <= ing.minStockLevel);
+  const outOfStockItems = ingredients.filter(ing => ing.currentStock === 0);
+  const totalValue = ingredients.reduce((sum, ing) => sum + (ing.currentStock * ing.unitPrice), 0);
 
-  const getStockStatusText = (status: string) => {
-    switch (status) {
-      case 'out': return 'Hết hàng';
-      case 'low': return 'Sắp hết';
-      case 'normal': return 'Bình thường';
-      default: return status;
-    }
-  };
-
-  const filteredIngredients = ingredients.filter(ingredient => {
-    // Filter by stock status
-    const stockStatus = getStockStatus(ingredient);
-    if (filter === 'low' && stockStatus !== 'low') return false;
-    if (filter === 'out' && stockStatus !== 'out') return false;
-    
-    // Filter by search text
-    if (searchText) {
-      return ingredient.name.toLowerCase().includes(searchText.toLowerCase()) ||
-             ingredient.category.toLowerCase().includes(searchText.toLowerCase());
-    }
-    
-    return true;
-  });
-
-  const lowStockCount = ingredients.filter(i => getStockStatus(i) === 'low').length;
-  const outOfStockCount = ingredients.filter(i => getStockStatus(i) === 'out').length;
-  const totalValue = ingredients.reduce((sum, i) => sum + (i.currentStock * i.unitPrice), 0);
-
-  const renderIngredient = ({ item }: { item: Ingredient }) => {
-    const stockStatus = getStockStatus(item);
-    const statusColor = getStockStatusColor(stockStatus);
-    
-    return (
-      <TouchableOpacity
-        style={styles.ingredientCard}
-        onPress={() => openAdjustmentModal(item)}
-      >
-        <View style={styles.ingredientHeader}>
-          <View style={styles.ingredientInfo}>
-            <Text style={styles.ingredientName}>{item.name}</Text>
-            <Text style={styles.ingredientCategory}>{item.category}</Text>
-          </View>
-          <View style={[styles.stockBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.stockBadgeText}>
-              {getStockStatusText(stockStatus)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.stockInfo}>
-          <View style={styles.stockRow}>
-            <Ionicons name="cube" size={16} color={Colors.light.icon} />
-            <Text style={styles.stockLabel}>Tồn kho:</Text>
-            <Text style={styles.stockValue}>
-              {item.currentStock} {item.unit}
-            </Text>
-          </View>
-          
-          <View style={styles.stockRow}>
-            <Ionicons name="warning" size={16} color={Colors.light.warning} />
-            <Text style={styles.stockLabel}>Tối thiểu:</Text>
-            <Text style={styles.stockValue}>
-              {item.minStockLevel} {item.unit}
-            </Text>
-          </View>
-          
-          <View style={styles.stockRow}>
-            <Ionicons name="cash" size={16} color={Colors.light.success} />
-            <Text style={styles.stockLabel}>Giá trị:</Text>
-            <Text style={styles.stockValue}>
-              {(item.currentStock * item.unitPrice).toLocaleString()}đ
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.actionButton}>
-          <Ionicons name="add-circle" size={20} color={Colors.light.primary} />
-          <Text style={styles.actionButtonText}>Điều chỉnh</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  useEffect(() => {
-    loadIngredients();
-  }, []);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadIngredients();
-  };
+  const tabs = [
+    { key: 'overview', label: 'Tổng quan', icon: 'grid' },
+    { key: 'ingredients', label: 'Nguyên liệu', icon: 'cube' },
+    { key: 'transactions', label: 'Giao dịch', icon: 'swap-horizontal' },
+  ];
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Kiểm kho</Text>
-        <View style={styles.headerStats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{lowStockCount}</Text>
-            <Text style={styles.statLabel}>Sắp hết</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{outOfStockCount}</Text>
-            <Text style={styles.statLabel}>Hết hàng</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{totalValue.toLocaleString()}đ</Text>
-            <Text style={styles.statLabel}>Tổng giá trị</Text>
-          </View>
-        </View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Quản lý kho</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={Colors.light.icon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm nguyên liệu..."
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        </View>
-      </View>
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {['all', 'low', 'out'].map((filterType) => (
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        {tabs.map((tab) => (
           <TouchableOpacity
-            key={filterType}
+            key={tab.key}
             style={[
-              styles.filterButton,
-              filter === filterType && styles.activeFilterButton
+              styles.tabButton,
+              selectedTab === tab.key && styles.activeTabButton
             ]}
-            onPress={() => setFilter(filterType as any)}
+            onPress={() => setSelectedTab(tab.key as any)}
           >
+            <Ionicons 
+              name={tab.icon as any} 
+              size={20} 
+              color={selectedTab === tab.key ? 'white' : Colors.textSecondary} 
+            />
             <Text style={[
-              styles.filterText,
-              filter === filterType && styles.activeFilterText
+              styles.tabText,
+              selectedTab === tab.key && styles.activeTabText
             ]}>
-              {filterType === 'all' ? 'Tất cả' : 
-               filterType === 'low' ? 'Sắp hết' : 'Hết hàng'}
+              {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Ingredients List */}
-      <FlatList
-        data={filteredIngredients}
-        renderItem={renderIngredient}
-        keyExtractor={(item) => item._id}
+      <ScrollView
+        style={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
+      >
+        {selectedTab === 'overview' && (
+          <View>
+            {/* Stats Cards */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{ingredients.length}</Text>
+                <Text style={styles.statLabel}>Tổng nguyên liệu</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statNumber, { color: '#F44336' }]}>{outOfStockItems.length}</Text>
+                <Text style={styles.statLabel}>Hết hàng</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statNumber, { color: '#FF9800' }]}>{lowStockItems.length}</Text>
+                <Text style={styles.statLabel}>Sắp hết</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={[styles.statNumber, { color: '#4CAF50' }]}>{formatCurrency(totalValue)}</Text>
+                <Text style={styles.statLabel}>Tổng giá trị</Text>
+              </View>
+            </View>
 
-      {/* Stock Adjustment Modal */}
+            {/* Low Stock Alert */}
+            {lowStockItems.length > 0 && (
+              <View style={styles.alertContainer}>
+                <Text style={styles.alertTitle}>⚠️ Cảnh báo sắp hết hàng</Text>
+                {lowStockItems.slice(0, 5).map((item) => (
+                  <View key={item._id} style={styles.alertItem}>
+                    <Text style={styles.alertItemName}>{item.name}</Text>
+                    <Text style={styles.alertItemStock}>
+                      {item.currentStock} {item.unit} (tối thiểu: {item.minStockLevel})
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Recent Transactions */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Giao dịch gần đây</Text>
+              {transactions.slice(0, 5).map((transaction) => (
+                <View key={transaction._id} style={styles.transactionItem}>
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionName}>{transaction.ingredient.name}</Text>
+                    <Text style={styles.transactionDate}>{formatDate(transaction.createdAt)}</Text>
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={[
+                      styles.transactionType,
+                      { color: transaction.transactionType === 'import' ? '#4CAF50' : '#F44336' }
+                    ]}>
+                      {transaction.transactionType === 'import' ? 'Nhập' : 'Xuất'} {transaction.quantity} {transaction.ingredient.unit}
+                    </Text>
+                    <Text style={styles.transactionAmount}>{formatCurrency(transaction.totalAmount)}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {selectedTab === 'ingredients' && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Danh sách nguyên liệu</Text>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  // Navigate to add ingredient screen
+                  Alert.alert('Thông báo', 'Tính năng thêm nguyên liệu sẽ được phát triển');
+                }}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.addButtonText}>Thêm</Text>
+              </TouchableOpacity>
+            </View>
+
+            {ingredients.map((ingredient) => {
+              const stockStatus = getStockStatus(ingredient);
+              return (
+                <TouchableOpacity
+                  key={ingredient._id}
+                  style={styles.ingredientCard}
+                  onPress={() => {
+                    setSelectedIngredient(ingredient);
+                    setTransactionForm(prev => ({
+                      ...prev,
+                      unitPrice: ingredient.unitPrice.toString(),
+                    }));
+                    setShowTransactionModal(true);
+                  }}
+                >
+                  <View style={styles.ingredientInfo}>
+                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                    <Text style={styles.ingredientCategory}>{ingredient.category}</Text>
+                    <Text style={styles.ingredientSupplier}>{ingredient.supplier || 'Chưa có nhà cung cấp'}</Text>
+                  </View>
+                  <View style={styles.ingredientStock}>
+                    <View style={[styles.stockBadge, { backgroundColor: stockStatus.color }]}>
+                      <Text style={styles.stockText}>{stockStatus.text}</Text>
+                    </View>
+                    <Text style={styles.stockAmount}>
+                      {ingredient.currentStock} {ingredient.unit}
+                    </Text>
+                    <Text style={styles.stockMin}>
+                      Tối thiểu: {ingredient.minStockLevel} {ingredient.unit}
+                    </Text>
+                    <Text style={styles.stockValue}>
+                      {formatCurrency(ingredient.unitPrice)}/{ingredient.unit}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {selectedTab === 'transactions' && (
+          <View>
+            <Text style={styles.sectionTitle}>Lịch sử giao dịch</Text>
+            {transactions.map((transaction) => (
+              <View key={transaction._id} style={styles.transactionCard}>
+                <View style={styles.transactionHeader}>
+                  <Text style={styles.transactionName}>{transaction.ingredient.name}</Text>
+                  <View style={[
+                    styles.transactionTypeBadge,
+                    { backgroundColor: transaction.transactionType === 'import' ? '#E8F5E8' : '#FFEBEE' }
+                  ]}>
+                    <Text style={[
+                      styles.transactionTypeText,
+                      { color: transaction.transactionType === 'import' ? '#4CAF50' : '#F44336' }
+                    ]}>
+                      {transaction.transactionType === 'import' ? 'NHẬP' : 'XUẤT'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.transactionDetails}>
+                  <Text style={styles.transactionQuantity}>
+                    {transaction.quantity} {transaction.ingredient.unit}
+                  </Text>
+                  <Text style={styles.transactionAmount}>{formatCurrency(transaction.totalAmount)}</Text>
+                </View>
+                <Text style={styles.transactionReason}>{transaction.reason}</Text>
+                <Text style={styles.transactionDate}>{formatDate(transaction.createdAt)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Transaction Modal */}
       <Modal
-        visible={showAdjustmentModal}
+        visible={showTransactionModal}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              Điều chỉnh tồn kho - {selectedIngredient?.name}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowAdjustmentModal(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color={Colors.light.text} />
-            </TouchableOpacity>
+        {selectedIngredient && (
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowTransactionModal(false)}>
+                <Text style={styles.modalCancelText}>Đóng</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {selectedIngredient.name} - Giao dịch kho
+              </Text>
+              <View style={styles.placeholder} />
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.ingredientInfo}>
+                <Text style={styles.ingredientName}>{selectedIngredient.name}</Text>
+                <Text style={styles.ingredientStock}>
+                  Tồn kho: {selectedIngredient.currentStock} {selectedIngredient.unit}
+                </Text>
+                <Text style={styles.ingredientPrice}>
+                  Giá: {formatCurrency(selectedIngredient.unitPrice)}/{selectedIngredient.unit}
+                </Text>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Số lượng</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={transactionForm.quantity}
+                  onChangeText={(text) => setTransactionForm(prev => ({ ...prev, quantity: text }))}
+                  keyboardType="numeric"
+                  placeholder="Nhập số lượng"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Đơn giá (VNĐ)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={transactionForm.unitPrice}
+                  onChangeText={(text) => setTransactionForm(prev => ({ ...prev, unitPrice: text }))}
+                  keyboardType="numeric"
+                  placeholder="Nhập đơn giá"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Lý do</Text>
+                <TextInput
+                  style={[styles.formInput, styles.textArea]}
+                  value={transactionForm.reason}
+                  onChangeText={(text) => setTransactionForm(prev => ({ ...prev, reason: text }))}
+                  placeholder="Nhập lý do giao dịch"
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Bộ phận</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={transactionForm.department}
+                  onChangeText={(text) => setTransactionForm(prev => ({ ...prev, department: text }))}
+                  placeholder="Nhập bộ phận"
+                />
+              </View>
+
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.importButton]}
+                  onPress={() => handleTransaction('import')}
+                  disabled={loading}
+                >
+                  <Ionicons name="add" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>Nhập kho</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.exportButton]}
+                  onPress={() => handleTransaction('export')}
+                  disabled={loading}
+                >
+                  <Ionicons name="remove" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>Xuất kho</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-
-          <ScrollView style={styles.modalContent}>
-            {selectedIngredient && (
-              <>
-                {/* Current Stock Info */}
-                <View style={styles.stockInfoSection}>
-                  <Text style={styles.sectionTitle}>Thông tin hiện tại</Text>
-                  <View style={styles.stockInfoCard}>
-                    <View style={styles.stockInfoRow}>
-                      <Text style={styles.stockInfoLabel}>Tồn kho hiện tại:</Text>
-                      <Text style={styles.stockInfoValue}>
-                        {selectedIngredient.currentStock} {selectedIngredient.unit}
-                      </Text>
-                    </View>
-                    <View style={styles.stockInfoRow}>
-                      <Text style={styles.stockInfoLabel}>Mức tối thiểu:</Text>
-                      <Text style={styles.stockInfoValue}>
-                        {selectedIngredient.minStockLevel} {selectedIngredient.unit}
-                      </Text>
-                    </View>
-                    <View style={styles.stockInfoRow}>
-                      <Text style={styles.stockInfoLabel}>Giá trị hiện tại:</Text>
-                      <Text style={styles.stockInfoValue}>
-                        {(selectedIngredient.currentStock * selectedIngredient.unitPrice).toLocaleString()}đ
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Adjustment Form */}
-                <View style={styles.adjustmentSection}>
-                  <Text style={styles.sectionTitle}>Điều chỉnh</Text>
-                  
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Loại điều chỉnh</Text>
-                    <View style={styles.operationButtons}>
-                      <TouchableOpacity
-                        style={[
-                          styles.operationButton,
-                          adjustmentForm.operation === 'add' && styles.selectedOperationButton
-                        ]}
-                        onPress={() => setAdjustmentForm(prev => ({ ...prev, operation: 'add' }))}
-                      >
-                        <Ionicons name="add" size={20} color={adjustmentForm.operation === 'add' ? '#fff' : Colors.light.success} />
-                        <Text style={[
-                          styles.operationButtonText,
-                          adjustmentForm.operation === 'add' && styles.selectedOperationButtonText
-                        ]}>
-                          Thêm
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.operationButton,
-                          adjustmentForm.operation === 'subtract' && styles.selectedOperationButton
-                        ]}
-                        onPress={() => setAdjustmentForm(prev => ({ ...prev, operation: 'subtract' }))}
-                      >
-                        <Ionicons name="remove" size={20} color={adjustmentForm.operation === 'subtract' ? '#fff' : Colors.light.error} />
-                        <Text style={[
-                          styles.operationButtonText,
-                          adjustmentForm.operation === 'subtract' && styles.selectedOperationButtonText
-                        ]}>
-                          Trừ
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Số lượng *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Nhập số lượng"
-                      value={adjustmentForm.quantity.toString()}
-                      onChangeText={(text) => setAdjustmentForm(prev => ({ 
-                        ...prev, 
-                        quantity: parseInt(text) || 0 
-                      }))}
-                      keyboardType="numeric"
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Lý do *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Nhập lý do điều chỉnh"
-                      value={adjustmentForm.reason}
-                      onChangeText={(text) => setAdjustmentForm(prev => ({ ...prev, reason: text }))}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Ghi chú</Text>
-                    <TextInput
-                      style={[styles.input, styles.textArea]}
-                      placeholder="Nhập ghi chú (tùy chọn)"
-                      value={adjustmentForm.notes}
-                      onChangeText={(text) => setAdjustmentForm(prev => ({ ...prev, notes: text }))}
-                      multiline
-                      numberOfLines={3}
-                    />
-                  </View>
-
-                  {/* Preview */}
-                  {adjustmentForm.quantity > 0 && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.sectionTitle}>Xem trước</Text>
-                      <View style={styles.previewCard}>
-                        <Text style={styles.previewText}>
-                          Tồn kho hiện tại: {selectedIngredient.currentStock} {selectedIngredient.unit}
-                        </Text>
-                        <Text style={styles.previewText}>
-                          {adjustmentForm.operation === 'add' ? '+' : '-'} {adjustmentForm.quantity} {selectedIngredient.unit}
-                        </Text>
-                        <Text style={styles.previewText}>
-                          = {adjustmentForm.operation === 'add' 
-                            ? selectedIngredient.currentStock + adjustmentForm.quantity
-                            : Math.max(0, selectedIngredient.currentStock - adjustmentForm.quantity)
-                          } {selectedIngredient.unit}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </>
-            )}
-          </ScrollView>
-
-          {/* Modal Actions */}
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowAdjustmentModal(false)}
-            >
-              <Text style={styles.cancelButtonText}>Hủy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.confirmButton}
-              onPress={adjustStock}
-            >
-              <Text style={styles.confirmButtonText}>Cập nhật</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )}
       </Modal>
     </View>
   );
@@ -486,311 +485,355 @@ export default function InventoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: Colors.background,
   },
   header: {
-    backgroundColor: Colors.light.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    backgroundColor: Colors.primary,
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
+    color: 'white',
   },
-  headerStats: {
+  placeholder: {
+    width: 40,
+  },
+  tabContainer: {
     flexDirection: 'row',
-    gap: 16,
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  statItem: {
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  activeTabButton: {
+    backgroundColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginLeft: 4,
+  },
+  activeTabText: {
+    color: 'white',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 20,
+  },
+  statCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    margin: 4,
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
+    color: Colors.primary,
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
-  searchContainer: {
+  alertContainer: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
     padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
   },
-  searchBar: {
+  alertTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginBottom: 12,
+  },
+  alertItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  alertItemName: {
+    fontSize: 14,
+    color: Colors.text,
+    flex: 1,
+  },
+  alertItemStock: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  addButton: {
+    backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.card,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    gap: 8,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.light.text,
+  addButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 16,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  activeFilterButton: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    fontWeight: '500',
-  },
-  activeFilterText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  listContainer: {
+  transactionItem: {
+    backgroundColor: 'white',
+    borderRadius: 12,
     padding: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  transactionDetails: {
+    alignItems: 'flex-end',
+  },
+  transactionType: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  transactionAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.text,
   },
   ingredientCard: {
-    backgroundColor: Colors.light.card,
+    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  ingredientHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   ingredientInfo: {
     flex: 1,
   },
   ingredientName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: Colors.light.text,
+    color: Colors.text,
+    marginBottom: 4,
   },
   ingredientCategory: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    marginTop: 2,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 2,
+  },
+  ingredientSupplier: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  ingredientStock: {
+    alignItems: 'flex-end',
   },
   stockBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    marginBottom: 4,
   },
-  stockBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+  stockText: {
+    fontSize: 10,
+    color: 'white',
+    fontWeight: 'bold',
   },
-  stockInfo: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  stockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stockLabel: {
+  stockAmount: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
-    minWidth: 80,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  stockMin: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginBottom: 2,
   },
   stockValue: {
-    fontSize: 14,
-    color: Colors.light.text,
-    fontWeight: '500',
+    fontSize: 10,
+    color: Colors.textSecondary,
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    backgroundColor: Colors.light.primaryLight,
-    borderRadius: 8,
-    gap: 8,
+  transactionCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  actionButtonText: {
-    color: Colors.light.primary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  modalHeader: {
+  transactionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
+    marginBottom: 8,
+  },
+  transactionTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  transactionTypeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  transactionQuantity: {
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  transactionReason: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalHeader: {
+    backgroundColor: Colors.primary,
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalCancelText: {
+    color: 'white',
+    fontSize: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: Colors.light.text,
-  },
-  closeButton: {
-    padding: 4,
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
   },
   modalContent: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 12,
-  },
-  stockInfoSection: {
-    marginBottom: 24,
-  },
-  stockInfoCard: {
-    backgroundColor: Colors.light.card,
-    padding: 16,
+  ingredientInfo: {
+    backgroundColor: 'white',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  stockInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  stockInfoLabel: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-  },
-  stockInfoValue: {
-    fontSize: 16,
-    color: Colors.light.text,
-    fontWeight: '500',
-  },
-  adjustmentSection: {
-    marginBottom: 24,
-  },
-  inputGroup: {
+    padding: 16,
     marginBottom: 20,
   },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
+  formGroup: {
+    marginBottom: 16,
+  },
+  formLabel: {
+    fontSize: 14,
+    color: Colors.text,
     marginBottom: 8,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
+  formInput: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: Colors.light.background,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
   },
-  operationButtons: {
+  actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 20,
   },
-  operationButton: {
+  actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: Colors.light.border,
-    backgroundColor: Colors.light.background,
-    gap: 8,
-  },
-  selectedOperationButton: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
-  },
-  operationButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-  },
-  selectedOperationButtonText: {
-    color: '#fff',
-  },
-  previewSection: {
-    marginBottom: 24,
-  },
-  previewCard: {
-    backgroundColor: Colors.light.card,
-    padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
   },
-  previewText: {
+  importButton: {
+    backgroundColor: '#4CAF50',
+  },
+  exportButton: {
+    backgroundColor: '#F44336',
+  },
+  actionButtonText: {
+    color: 'white',
     fontSize: 16,
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  cancelButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  confirmButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.light.primary,
-    alignItems: 'center',
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });

@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const Employee = require('../models/Employee');
 const Menu = require('../models/Menu');
+const Booking = require('../models/Booking');
 const router = express.Router();
 
 // Middleware để xác thực token
@@ -163,6 +164,91 @@ router.get('/top-items', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching top items:', error);
     res.status(500).json({ message: 'Lỗi server khi lấy top món bán chạy' });
+  }
+});
+
+// Lấy hoạt động gần đây
+router.get('/recent-activities', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    const activities = [];
+
+    // Lấy đặt bàn gần đây
+    const recentBookings = await Booking.find()
+      .populate('customer', 'fullName phone')
+      .populate('table', 'name')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) / 4);
+
+    recentBookings.forEach(booking => {
+      activities.push({
+        _id: `booking_${booking._id}`,
+        type: 'booking',
+        description: `Đặt bàn mới từ ${booking.customer.fullName}`,
+        tableName: booking.table?.name,
+        amount: booking.totalAmount,
+        createdAt: booking.createdAt
+      });
+    });
+
+    // Lấy thanh toán gần đây
+    const recentPayments = await Order.find({ status: 'paid' })
+      .populate('table', 'name')
+      .sort({ updatedAt: -1 })
+      .limit(parseInt(limit) / 4);
+
+    recentPayments.forEach(order => {
+      activities.push({
+        _id: `payment_${order._id}`,
+        type: 'payment',
+        description: `Thanh toán hoàn tất`,
+        tableName: order.table?.name,
+        amount: order.totalAmount,
+        createdAt: order.updatedAt
+      });
+    });
+
+    // Lấy đơn hàng gần đây
+    const recentOrders = await Order.find({ status: 'pending' })
+      .populate('table', 'name')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) / 4);
+
+    recentOrders.forEach(order => {
+      activities.push({
+        _id: `order_${order._id}`,
+        type: 'order',
+        description: `Đơn hàng mới`,
+        tableName: order.table?.name,
+        amount: order.totalAmount,
+        createdAt: order.createdAt
+      });
+    });
+
+    // Lấy giao dịch kho gần đây
+    const recentInventory = await InventoryTransaction.find()
+      .populate('ingredient', 'name')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) / 4);
+
+    recentInventory.forEach(transaction => {
+      activities.push({
+        _id: `inventory_${transaction._id}`,
+        type: 'inventory',
+        description: `${transaction.transactionType === 'import' ? 'Nhập' : 'Xuất'} ${transaction.ingredient.name}`,
+        amount: transaction.totalAmount,
+        createdAt: transaction.createdAt
+      });
+    });
+
+    // Sắp xếp theo thời gian và giới hạn
+    activities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    activities.splice(parseInt(limit));
+
+    res.json(activities);
+  } catch (error) {
+    console.error('Error fetching recent activities:', error);
+    res.status(500).json({ message: 'Lỗi server khi lấy hoạt động gần đây' });
   }
 });
 

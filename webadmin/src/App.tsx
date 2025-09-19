@@ -49,7 +49,7 @@ type Menu = {
   ingredients?: Ingredient[];
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Axios interceptor để xử lý lỗi 401
 axios.interceptors.response.use(
@@ -85,7 +85,7 @@ type Employee = {
 export default function App() {
   const [user, setUser] = useState<Employee | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tab, setTab] = useState<'menu' | 'menu-list' | 'dashboard' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history' | 'inventory-dashboard' | 'stock-check' | 'import-export'>('dashboard');
+  const [tab, setTab] = useState<'menu' | 'dashboard' | 'tables' | 'employees' | 'customers' | 'bookings' | 'payments' | 'payment' | 'history' | 'inventory-dashboard' | 'stock-check' | 'import-export'>('dashboard');
   const [items, setItems] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -396,19 +396,6 @@ export default function App() {
               Dashboard
             </button>
             
-            <button 
-              onClick={() => setTab('menu-list')} 
-              className={`w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors ${
-                tab === 'menu-list' 
-                  ? 'bg-green-600 text-white shadow-lg' 
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              Danh sách Món
-            </button>
             
             <button 
               onClick={() => setTab('menu')} 
@@ -559,7 +546,6 @@ export default function App() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white capitalize">
               {tab === 'dashboard' && 'Dashboard'}
-              {tab === 'menu-list' && 'Danh sách Món ăn'}
               {tab === 'menu' && 'Quản lý Món ăn'}
               {tab === 'tables' && 'Quản lý Bàn'}
               {tab === 'employees' && 'Quản lý Nhân viên'}
@@ -601,8 +587,6 @@ export default function App() {
         <div className="flex-1 bg-gray-900 p-6 overflow-y-auto">
         {tab==='dashboard' ? (
           <Dashboard API={API} token={token} />
-        ) : tab==='menu-list' ? (
-          <MenuList API={API} token={token} />
         ) : tab==='menu' ? (
           loading ? (
             <div className="flex flex-col items-center justify-center py-16">
@@ -823,7 +807,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -1010,7 +994,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1288,7 +1272,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('pending');
@@ -2391,7 +2375,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.6:5000';
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');

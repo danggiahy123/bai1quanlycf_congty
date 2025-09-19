@@ -49,47 +49,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="bookings"
+        name="booking-approve"
         options={{
-          title: 'Đặt bàn',
+          title: 'Duyệt bàn',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'restaurant' : 'restaurant-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'checkmark-circle' : 'checkmark-circle-outline'} size={24} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="tables"
+        name="inventory"
         options={{
-          title: 'Quản lý bàn',
+          title: 'Kho',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="payments"
-        options={{
-          title: 'Thanh toán',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'card' : 'card-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="order"
-        options={{
-          title: 'Gọi món',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'restaurant' : 'restaurant-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: 'Thông báo',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={24} color={color} />
+            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={24} color={color} />
           ),
         }}
       />

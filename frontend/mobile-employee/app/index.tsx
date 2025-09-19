@@ -106,154 +106,156 @@ export default function HomeScreen() {
     loadDashboardData();
   };
 
-  const quickActions = [
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc chắn muốn đăng xuất?',
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Đăng xuất',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('userToken');
+            await AsyncStorage.removeItem('userInfo');
+            router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
+
+  const mainFeatures = [
     {
+      id: 'booking',
       title: 'Đặt bàn cho khách',
-      subtitle: 'Tạo booking cho khách hàng',
+      subtitle: 'Tạo đặt bàn trực tiếp',
       icon: 'restaurant',
       color: '#FF6B6B',
-      onPress: () => router.push('/bookings'),
+      onPress: () => router.push('/booking-create'),
     },
     {
+      id: 'approve',
       title: 'Duyệt bàn cho khách',
-      subtitle: 'Xác nhận và quản lý đặt bàn',
+      subtitle: 'Xác nhận đặt bàn',
       icon: 'checkmark-circle',
       color: '#4ECDC4',
-      onPress: () => router.push('/bookings'),
+      onPress: () => router.push('/booking-approve'),
     },
     {
-      title: 'Thanh toán bàn',
-      subtitle: 'Xử lý thanh toán cho các bàn',
+      id: 'order-payment',
+      title: 'Gọi món & Thanh toán',
+      subtitle: 'Thêm món và xử lý thanh toán',
       icon: 'card',
       color: '#45B7D1',
-      onPress: () => router.push('/payments'),
-    },
-    {
-      title: 'Order thêm món',
-      subtitle: 'Thêm món ăn cho khách',
-      icon: 'add-circle',
-      color: '#96CEB4',
-      onPress: () => router.push('/order'),
+      onPress: () => router.push('/order-payment'),
     },
   ];
-
-  const StatCard = ({ title, value, icon, color, subtitle }: any) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statHeader}>
-        <Ionicons name={icon} size={20} color={color} />
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-    </View>
-  );
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Ionicons name="restaurant" size={64} color={Colors.light.primary} />
-        <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+        <View style={styles.loadingContent}>
+          <Ionicons name="restaurant" size={48} color={Colors.primary} />
+          <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView
+    <ScrollView 
       style={styles.container}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
-      showsVerticalScrollIndicator={false}
     >
-      {/* Welcome Header */}
-      <View style={styles.welcomeHeader}>
-        <View>
-          <Text style={styles.welcomeText}>Xin chào!</Text>
-          <Text style={styles.userName}>{userInfo?.fullName || 'Nhân viên'}</Text>
-          <Text style={styles.userRole}>Nhân viên nhà hàng</Text>
-        </View>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={24} color="#fff" />
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.userInfo}>
+            <View style={styles.avatar}>
+              <Ionicons name="person" size={24} color="white" />
+            </View>
+            <View style={styles.userDetails}>
+              <Text style={styles.userName}>
+                {userInfo?.fullName || 'Nhân viên'}
+              </Text>
+              <Text style={styles.userRole}>Nhân viên nhà hàng</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={24} color={Colors.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Quick Stats */}
-      <View style={styles.statsGrid}>
-        <StatCard
-          title="Đặt bàn chờ"
-          value={stats.pendingBookings}
-          icon="time"
-          color={Colors.light.warning}
-        />
-        <StatCard
-          title="Đã xác nhận"
-          value={stats.confirmedBookings}
-          icon="checkmark-circle"
-          color={Colors.light.success}
-        />
-        <StatCard
-          title="Bàn trống"
-          value={stats.emptyTables}
-          icon="restaurant-outline"
-          color={Colors.light.primary}
-        />
-        <StatCard
-          title="Bàn đang dùng"
-          value={stats.occupiedTables}
-          icon="people"
-          color={Colors.light.error}
-        />
-      </View>
-
-      {/* Revenue Card */}
-      <View style={styles.revenueCard}>
-        <View style={styles.revenueHeader}>
-          <Ionicons name="trending-up" size={24} color={Colors.light.success} />
-          <Text style={styles.revenueTitle}>Doanh thu hôm nay</Text>
+      <View style={styles.statsContainer}>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.pendingBookings}</Text>
+            <Text style={styles.statLabel}>Chờ xác nhận</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.confirmedBookings}</Text>
+            <Text style={styles.statLabel}>Đã xác nhận</Text>
+          </View>
         </View>
-        <Text style={styles.revenueAmount}>
-          {stats.totalRevenue.toLocaleString()}đ
-        </Text>
-        <Text style={styles.revenueSubtitle}>
-          Từ {stats.confirmedBookings} đặt bàn đã xác nhận
-        </Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.emptyTables}</Text>
+            <Text style={styles.statLabel}>Bàn trống</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{stats.occupiedTables}</Text>
+            <Text style={styles.statLabel}>Bàn đang dùng</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.quickActionsSection}>
+      {/* Main Features */}
+      <View style={styles.featuresContainer}>
         <Text style={styles.sectionTitle}>Quản lý nhà hàng</Text>
-        <View style={styles.quickActionsGrid}>
-          {quickActions.map((action, index) => (
+        <View style={styles.featuresGrid}>
+          {mainFeatures.map((feature) => (
             <TouchableOpacity
-              key={index}
-              style={[styles.quickActionCard, { borderLeftColor: action.color, borderLeftWidth: 4 }]}
-              onPress={action.onPress}
+              key={feature.id}
+              style={[styles.featureCard, { borderLeftColor: feature.color }]}
+              onPress={feature.onPress}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
-                <Ionicons name={action.icon as any} size={24} color="#fff" />
+              <View style={styles.featureContent}>
+                <View style={[styles.featureIcon, { backgroundColor: feature.color }]}>
+                  <Ionicons name={feature.icon as any} size={24} color="white" />
+                </View>
+                <View style={styles.featureText}>
+                  <Text style={styles.featureTitle}>{feature.title}</Text>
+                  <Text style={styles.featureSubtitle}>{feature.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.text} />
               </View>
-              <Text style={styles.quickActionTitle}>{action.title}</Text>
-              <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
-              <Ionicons name="chevron-forward" size={16} color={Colors.light.textSecondary} style={styles.arrowIcon} />
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* Recent Activity */}
-      <View style={styles.recentActivitySection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Hoạt động gần đây</Text>
-          <TouchableOpacity onPress={() => router.push('/notifications')}>
-            <Text style={styles.seeAllText}>Xem tất cả</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.activityCard}>
-          <Ionicons name="notifications" size={20} color={Colors.light.primary} />
-          <View style={styles.activityContent}>
-            <Text style={styles.activityTitle}>Hệ thống đã sẵn sàng</Text>
-            <Text style={styles.activityTime}>Vừa xong</Text>
-          </View>
+      {/* Revenue Summary */}
+      <View style={styles.revenueContainer}>
+        <Text style={styles.sectionTitle}>Doanh thu hôm nay</Text>
+        <View style={styles.revenueCard}>
+          <Text style={styles.revenueAmount}>
+            {formatCurrency(stats.totalRevenue)}
+          </Text>
+          <Text style={styles.revenueLabel}>
+            {stats.confirmedBookings} đặt bàn đã xác nhận
+          </Text>
         </View>
       </View>
     </ScrollView>
@@ -263,213 +265,167 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: Colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: Colors.background,
+  },
+  loadingContent: {
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: Colors.light.textSecondary,
+    color: Colors.text,
   },
-  welcomeHeader: {
+  header: {
+    backgroundColor: Colors.primary,
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: Colors.light.primary,
   },
-  welcomeText: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 4,
-  },
-  userRole: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.8,
-    marginTop: 2,
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 12,
+  userDetails: {
+    flex: 1,
   },
-  statCard: {
-    width: (width - 44) / 2,
-    backgroundColor: Colors.light.card,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statTitle: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  statValue: {
-    fontSize: 24,
+  userName: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 4,
+    color: 'white',
   },
-  statSubtitle: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
+  userRole: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
   },
-  revenueCard: {
-    margin: 16,
-    backgroundColor: Colors.light.card,
+  logoutButton: {
+    padding: 8,
+  },
+  statsContainer: {
     padding: 20,
-    borderRadius: 16,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 5,
   },
-  revenueHeader: {
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  revenueTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginLeft: 8,
-  },
-  revenueAmount: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.light.success,
-    marginBottom: 4,
-  },
-  revenueSubtitle: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-  },
-  quickActionsSection: {
+  statCard: {
+    flex: 1,
+    backgroundColor: 'white',
     padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.light.text,
-    marginBottom: 16,
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  quickActionCard: {
-    width: (width - 44) / 2,
-    backgroundColor: Colors.light.card,
-    padding: 20,
-    borderRadius: 16,
+    borderRadius: 12,
+    marginHorizontal: 4,
     alignItems: 'center',
-    shadowColor: Colors.light.shadow,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    position: 'relative',
   },
-  quickActionIcon: {
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: Colors.text,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  featuresContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 16,
+  },
+  featuresGrid: {
+    gap: 12,
+  },
+  featureCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  featureContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  featureIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginRight: 16,
   },
-  quickActionTitle: {
+  featureText: {
+    flex: 1,
+  },
+  featureTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.text,
-    textAlign: 'center',
+    fontWeight: 'bold',
+    color: Colors.text,
     marginBottom: 4,
   },
-  quickActionSubtitle: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-  },
-  arrowIcon: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    marginTop: -8,
-  },
-  recentActivitySection: {
-    padding: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  seeAllText: {
+  featureSubtitle: {
     fontSize: 14,
-    color: Colors.light.primary,
-    fontWeight: '500',
+    color: Colors.textSecondary,
   },
-  activityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.light.card,
-    padding: 16,
+  revenueContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  revenueCard: {
+    backgroundColor: 'white',
+    padding: 20,
     borderRadius: 12,
-    shadowColor: Colors.light.shadow,
+    alignItems: 'center',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  activityContent: {
-    marginLeft: 12,
-    flex: 1,
+  revenueAmount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.primary,
+    marginBottom: 8,
   },
-  activityTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
+  revenueLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
 });

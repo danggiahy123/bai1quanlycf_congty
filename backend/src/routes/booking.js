@@ -49,15 +49,23 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Số tiền cọc tối thiểu là 50,000đ' });
     }
 
-    // Kiểm tra bàn có tồn tại
-    const table = await Table.findById(tableId);
+    // Kiểm tra bàn có tồn tại - tìm theo tableId hoặc tableNumber
+    let table;
+    if (tableId.match(/^[0-9a-fA-F]{24}$/)) {
+      // Nếu tableId là ObjectId
+      table = await Table.findById(tableId);
+    } else {
+      // Nếu tableId là tableNumber (string)
+      table = await Table.findOne({ tableNumber: tableId });
+    }
+    
     if (!table) {
       return res.status(404).json({ message: 'Không tìm thấy bàn' });
     }
 
     // Kiểm tra xem bàn có booking nào đang pending hoặc confirmed không trong cùng thời gian
     const existingBooking = await Booking.findOne({
-      table: tableId,
+      table: table._id, // Sử dụng ObjectId của table
       status: { $in: ['pending', 'confirmed'] },
       bookingDate: new Date(bookingDate),
       bookingTime: bookingTime
@@ -119,7 +127,7 @@ router.post('/', authenticateToken, async (req, res) => {
     
     const booking = new Booking({
       customer: req.user.id,
-      table: tableId,
+      table: table._id, // Sử dụng ObjectId từ table đã tìm được
       numberOfGuests,
       bookingDate: new Date(bookingDate),
       bookingTime,

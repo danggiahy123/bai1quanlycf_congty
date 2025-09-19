@@ -26,6 +26,15 @@ interface TopItem {
   category: string;
 }
 
+interface RecentActivity {
+  _id: string;
+  type: 'booking' | 'payment' | 'order' | 'inventory';
+  description: string;
+  amount?: number;
+  tableName?: string;
+  createdAt: string;
+}
+
 interface DashboardProps {
   API: string;
   token: string;
@@ -45,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ API, token }) => {
   
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
 
@@ -61,15 +71,17 @@ const Dashboard: React.FC<DashboardProps> = ({ API, token }) => {
       };
 
       // Fetch all data in parallel
-      const [statsRes, revenueRes, topItemsRes] = await Promise.all([
+      const [statsRes, revenueRes, topItemsRes, activitiesRes] = await Promise.all([
         axios.get(`${API}/api/dashboard/stats`, { headers }),
         axios.get(`${API}/api/dashboard/revenue?range=${timeRange}`, { headers }),
-        axios.get(`${API}/api/dashboard/top-items`, { headers })
+        axios.get(`${API}/api/dashboard/top-items`, { headers }),
+        axios.get(`${API}/api/dashboard/recent-activities`, { headers })
       ]);
 
       setStats(statsRes.data);
       setRevenueData(revenueRes.data);
       setTopItems(topItemsRes.data);
+      setRecentActivities(activitiesRes.data || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -289,38 +301,89 @@ const Dashboard: React.FC<DashboardProps> = ({ API, token }) => {
       <div className="mt-8 bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Hoạt động gần đây</h3>
         <div className="space-y-4">
-          <div className="flex items-center p-3 bg-green-50 rounded-lg">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Bàn 5 đã thanh toán</p>
-              <p className="text-xs text-gray-500">2 phút trước</p>
+          {recentActivities.length > 0 ? (
+            recentActivities.map((activity) => {
+              const getActivityIcon = (type: string) => {
+                switch (type) {
+                  case 'booking':
+                    return <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>;
+                  case 'payment':
+                    return <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>;
+                  case 'order':
+                    return <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>;
+                  case 'inventory':
+                    return <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>;
+                  default:
+                    return <div className="w-2 h-2 bg-gray-500 rounded-full mr-3"></div>;
+                }
+              };
+
+              const getActivityBg = (type: string) => {
+                switch (type) {
+                  case 'booking':
+                    return 'bg-blue-50';
+                  case 'payment':
+                    return 'bg-green-50';
+                  case 'order':
+                    return 'bg-yellow-50';
+                  case 'inventory':
+                    return 'bg-purple-50';
+                  default:
+                    return 'bg-gray-50';
+                }
+              };
+
+              const getActivityTextColor = (type: string) => {
+                switch (type) {
+                  case 'booking':
+                    return 'text-blue-600';
+                  case 'payment':
+                    return 'text-green-600';
+                  case 'order':
+                    return 'text-yellow-600';
+                  case 'inventory':
+                    return 'text-purple-600';
+                  default:
+                    return 'text-gray-600';
+                }
+              };
+
+              const formatTimeAgo = (dateString: string) => {
+                const now = new Date();
+                const activityDate = new Date(dateString);
+                const diffInMinutes = Math.floor((now.getTime() - activityDate.getTime()) / (1000 * 60));
+                
+                if (diffInMinutes < 1) return 'Vừa xong';
+                if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+                if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
+                return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+              };
+
+              return (
+                <div key={activity._id} className={`flex items-center p-3 ${getActivityBg(activity.type)} rounded-lg`}>
+                  {getActivityIcon(activity.type)}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{activity.description}</p>
+                    <p className="text-xs text-gray-500">{formatTimeAgo(activity.createdAt)}</p>
+                  </div>
+                  {activity.amount && (
+                    <div className={`ml-auto text-sm font-semibold ${getActivityTextColor(activity.type)}`}>
+                      {formatCurrency(activity.amount)}
+                    </div>
+                  )}
+                  {activity.tableName && (
+                    <div className={`ml-auto text-sm font-semibold ${getActivityTextColor(activity.type)}`}>
+                      {activity.tableName}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center text-gray-500 py-8">
+              Không có hoạt động gần đây
             </div>
-            <div className="ml-auto text-sm font-semibold text-green-600">
-              +150.000 VNĐ
-            </div>
-          </div>
-          
-          <div className="flex items-center p-3 bg-blue-50 rounded-lg">
-            <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Đơn hàng mới #1234</p>
-              <p className="text-xs text-gray-500">5 phút trước</p>
-            </div>
-            <div className="ml-auto text-sm font-semibold text-blue-600">
-              Bàn 3
-            </div>
-          </div>
-          
-          <div className="flex items-center p-3 bg-yellow-50 rounded-lg">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Khách hàng mới đăng ký</p>
-              <p className="text-xs text-gray-500">10 phút trước</p>
-            </div>
-            <div className="ml-auto text-sm font-semibold text-yellow-600">
-              +1
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -344,4 +344,21 @@ router.get('/report/stock', authenticateToken, async (req, res) => {
   }
 });
 
+// Lấy giao dịch gần đây
+router.get('/recent', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const transactions = await InventoryTransaction.find()
+      .populate('ingredient', 'name unit')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching recent transactions:', error);
+    res.status(500).json({ message: 'Lỗi server khi lấy giao dịch gần đây' });
+  }
+});
+
 module.exports = router;

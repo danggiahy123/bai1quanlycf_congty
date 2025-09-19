@@ -7,7 +7,7 @@ const bookingSchema = new mongoose.Schema({
     required: false // Cho phép null cho admin quick booking
   },
   table: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Table',
     required: false // Cho phép null cho admin quick booking
   },
