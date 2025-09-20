@@ -3,7 +3,7 @@
 ## 🎯 **Quy trình sử dụng:**
 
 ### **Bước 1: Mở Mobile App**
-- Quét QR code hoặc truy cập: `http://192.168.5.162:8081`
+- Quét QR code hoặc truy cập: `http://192.168.5.117:8081`
 - App sẽ hiển thị màn hình chào mừng
 
 ### **Bước 2: Đăng nhập**
@@ -70,9 +70,9 @@ Sau khi đăng nhập thành công, app sẽ tự động chuyển sang giao di�
 
 ## 🚀 **Trạng thái hệ thống:**
 
-- ✅ **Backend**: http://192.168.5.162:5000
-- ✅ **Mobile App**: http://192.168.5.162:8081
-- ✅ **Webadmin**: http://192.168.5.162:5173
+- ✅ **Backend**: http://192.168.5.117:5000
+- ✅ **Mobile App**: http://192.168.5.117:8081
+- ✅ **Webadmin**: http://192.168.5.117:5173
 
 ## 📋 **Test checklist:**
 

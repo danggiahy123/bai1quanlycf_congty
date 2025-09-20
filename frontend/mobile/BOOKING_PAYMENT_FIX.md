@@ -99,7 +99,7 @@ requiresDeposit: true
 
 ## 🚀 **Cách kiểm tra:**
 
-1. **Mở app**: `http://192.168.5.162:8081`
+1. **Mở app**: `http://192.168.5.117:8081`
 2. **Đăng nhập**: Chọn "Đăng nhập khách hàng"
 3. **Đặt bàn**: Chọn bàn → Chọn món → Xác nhận
 4. **Kiểm tra**: Thấy "ĐẶT BÀN ĐÃ ĐƯỢC TẠO (CHỜ XÁC NHẬN)"
@@ -108,8 +108,8 @@ requiresDeposit: true
 
 ## 📊 **Trạng thái hệ thống:**
 
-- ✅ **Backend**: http://192.168.5.162:5000
-- ✅ **Mobile App**: http://192.168.5.162:8081
+- ✅ **Backend**: http://192.168.5.117:5000
+- ✅ **Mobile App**: http://192.168.5.117:8081
 - ✅ **API Booking**: Hoạt động đúng
 - ✅ **API Payment**: Hoạt động đúng
 

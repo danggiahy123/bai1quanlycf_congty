@@ -4,11 +4,11 @@ const notificationSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Customer',
-    required: true
+    required: false // Cho phép null cho thông báo chung
   },
   type: {
     type: String,
-    enum: ['booking_pending', 'booking_confirmed', 'booking_cancelled', 'booking_reminder', 'payment_completed', 'deposit_confirmed', 'deposit_pending_approval'],
+    enum: ['booking_pending', 'booking_confirmed', 'booking_cancelled', 'booking_reminder', 'payment_completed', 'deposit_confirmed', 'deposit_pending_approval', 'manual_payment_confirmed'],
     required: true
   },
   title: {

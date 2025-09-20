@@ -36,7 +36,7 @@ const transactionHistorySchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['qr_code', 'cash', 'card', 'bank_transfer'],
+    enum: ['qr_code', 'cash', 'card', 'bank_transfer', 'manual', 'manual_confirmation'],
     default: 'qr_code'
   },
   status: {

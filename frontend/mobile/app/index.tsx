@@ -325,66 +325,6 @@ export default function IndexScreen() {
                 <ThemedText style={styles.employeeFeatureTitle}>Đặt bàn</ThemedText>
                 <ThemedText style={styles.employeeFeatureSubtitle}>Quản lý đặt bàn</ThemedText>
               </TouchableOpacity>
-
-              {/* Order */}
-              <TouchableOpacity 
-                style={[styles.employeeFeatureCard, { backgroundColor: '#4ECDC4' }]}
-                onPress={() => router.push('/employee-payments')}
-              >
-                <View style={styles.employeeFeatureIconWrapper}>
-                  <Ionicons name="receipt" size={28} color="#fff" />
-                </View>
-                <ThemedText style={styles.employeeFeatureTitle}>Order</ThemedText>
-                <ThemedText style={styles.employeeFeatureSubtitle}>Quản lý đơn hàng</ThemedText>
-              </TouchableOpacity>
-
-              {/* Thanh toán */}
-              <TouchableOpacity 
-                style={[styles.employeeFeatureCard, { backgroundColor: '#45B7D1' }]}
-                onPress={() => router.push('/employee-payments')}
-              >
-                <View style={styles.employeeFeatureIconWrapper}>
-                  <Ionicons name="card" size={28} color="#fff" />
-                </View>
-                <ThemedText style={styles.employeeFeatureTitle}>Thanh toán</ThemedText>
-                <ThemedText style={styles.employeeFeatureSubtitle}>Xử lý thanh toán</ThemedText>
-              </TouchableOpacity>
-
-              {/* Thông báo */}
-              <TouchableOpacity 
-                style={[styles.employeeFeatureCard, { backgroundColor: '#96CEB4' }]}
-                onPress={() => {}}
-              >
-                <View style={styles.employeeFeatureIconWrapper}>
-                  <Ionicons name="notifications" size={28} color="#fff" />
-                </View>
-                <ThemedText style={styles.employeeFeatureTitle}>Thông báo</ThemedText>
-                <ThemedText style={styles.employeeFeatureSubtitle}>Xem thông báo</ThemedText>
-              </TouchableOpacity>
-
-              {/* Chỉnh sửa profile */}
-              <TouchableOpacity 
-                style={[styles.employeeFeatureCard, { backgroundColor: '#FECA57' }]}
-                onPress={() => {}}
-              >
-                <View style={styles.employeeFeatureIconWrapper}>
-                  <Ionicons name="person" size={28} color="#fff" />
-                </View>
-                <ThemedText style={styles.employeeFeatureTitle}>Chỉnh sửa profile</ThemedText>
-                <ThemedText style={styles.employeeFeatureSubtitle}>Cập nhật thông tin</ThemedText>
-              </TouchableOpacity>
-
-              {/* Thêm tính năng mở rộng */}
-              <TouchableOpacity 
-                style={[styles.employeeFeatureCard, { backgroundColor: '#A55EEA' }]}
-                onPress={() => {}}
-              >
-                <View style={styles.employeeFeatureIconWrapper}>
-                  <Ionicons name="settings" size={28} color="#fff" />
-                </View>
-                <ThemedText style={styles.employeeFeatureTitle}>Cài đặt</ThemedText>
-                <ThemedText style={styles.employeeFeatureSubtitle}>Tùy chỉnh hệ thống</ThemedText>
-              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>

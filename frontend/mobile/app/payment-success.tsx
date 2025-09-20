@@ -21,7 +21,7 @@ export default function PaymentSuccessScreen() {
             freeTable(state.tableId);
           }
           clearOrder();
-          router.replace('/home');
+          router.replace('/');
         }}
       >
         <ThemedText style={{ color: '#fff' }}>Về trang chủ</ThemedText>

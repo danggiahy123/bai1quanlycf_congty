@@ -56,19 +56,19 @@ cd backend && node src/scripts/createSimpleSampleData.js
 
 ### **1. Test API trực tiếp:**
 ```bash
-curl http://192.168.5.162:5000/api/menu
+curl http://192.168.5.117:5000/api/menu
 ```
 
 ### **2. Test Mobile App:**
-1. Mở app: `http://192.168.5.162:8081`
+1. Mở app: `http://192.168.5.117:8081`
 2. Đăng nhập khách hàng
 3. Chọn "Đặt bàn" → "Chọn món"
 4. Kiểm tra danh sách món ăn
 
 ## 📊 **Trạng thái hệ thống:**
 
-- ✅ **Backend**: http://192.168.5.162:5000
-- ✅ **Mobile App**: http://192.168.5.162:8081
+- ✅ **Backend**: http://192.168.5.117:5000
+- ✅ **Mobile App**: http://192.168.5.117:8081
 - ✅ **API Menu**: Hoạt động bình thường
 - ✅ **Database**: 6 món ăn mẫu
 

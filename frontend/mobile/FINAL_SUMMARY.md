@@ -4,7 +4,7 @@
 
 ### 🎯 **Quy trình sử dụng:**
 
-1. **Mở mobile app**: `http://192.168.5.162:8081`
+1. **Mở mobile app**: `http://192.168.5.117:8081`
 2. **Đăng nhập**:
    - **Khách hàng**: Chọn "Đăng nhập khách hàng"
    - **Nhân viên**: Chọn "Đăng nhập nhân viên"
@@ -43,9 +43,9 @@
 
 ### 📊 **Trạng thái hệ thống:**
 
-- ✅ **Backend**: http://192.168.5.162:5000
-- ✅ **Mobile App**: http://192.168.5.162:8081
-- ✅ **Webadmin**: http://192.168.5.162:5173
+- ✅ **Backend**: http://192.168.5.117:5000
+- ✅ **Mobile App**: http://192.168.5.117:8081
+- ✅ **Webadmin**: http://192.168.5.117:5173
 
 ### 🎉 **Kết quả:**
 

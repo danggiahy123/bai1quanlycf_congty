@@ -3,951 +3,1641 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
-  RefreshControl,
+  TextInput,
   Alert,
   Modal,
-  TextInput,
-  ScrollView,
+  FlatList,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { tryApiCall } from '../constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-interface Booking {
-  _id: string;
-  customer: {
-    fullName: string;
-    phone: string;
-    email?: string;
-  };
-  table: {
-    name: string;
-  };
-  numberOfGuests: number;
-  bookingDate: string;
-  bookingTime: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  totalAmount: number;
-  depositAmount: number;
-  createdAt: string;
-  customerInfo?: {
-    fullName: string;
-    phone: string;
-    email?: string;
-  };
-}
-
-interface Table {
-  _id: string;
-  name: string;
-  status: 'empty' | 'occupied';
-  capacity: number;
-  location: string;
-  features: string[];
-}
+import { useRouter } from 'expo-router';
 
 interface Customer {
   _id: string;
   fullName: string;
   phone: string;
   email: string;
+  username?: string;
+}
+
+interface Table {
+  _id: string;
+  name: string;
+  capacity: number;
+  status: 'empty' | 'occupied';
+}
+
+interface MenuItem {
+  _id: string;
+  name: string;
+  price: number;
+  description?: string;
+  image?: string;
 }
 
 export default function BookingsScreen() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
-  const [showQuickBooking, setShowQuickBooking] = useState(false);
+  const router = useRouter();
   const [tables, setTables] = useState<Table[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [searchText, setSearchText] = useState('');
-  const [showCustomerSearch, setShowCustomerSearch] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null);
+  const [foundCustomers, setFoundCustomers] = useState<Customer[]>([]);
+  const [showCustomerList, setShowCustomerList] = useState(false);
+  const [selectedMenuItems, setSelectedMenuItems] = useState<Array<{item: MenuItem; quantity: number}>>([]);
   
-  const [quickBookingForm, setQuickBookingForm] = useState({
+  // QR Code states
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrCode, setQrCode] = useState<string>('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [currentBooking, setCurrentBooking] = useState<any>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'checking' | 'paid' | 'failed'>('pending');
+  const [checkingPayment, setCheckingPayment] = useState(false);
+
+  // Form data
+  const [formData, setFormData] = useState({
+    customerId: '',
     customerName: '',
     customerPhone: '',
-    customerEmail: '',
     tableId: '',
+    tableName: '',
     numberOfGuests: 1,
     bookingDate: new Date().toISOString().split('T')[0],
     bookingTime: new Date().toTimeString().slice(0, 5),
-    specialRequests: '',
-    depositAmount: '50000',
+    depositAmount: 50000, // Tối thiểu 50,000đ
+    note: '',
   });
 
-  const loadBookings = async () => {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
       
       if (!token) {
         Alert.alert('Lỗi', 'Vui lòng đăng nhập lại');
+        router.replace('/login');
         return;
       }
 
-      const result = await tryApiCall('/api/bookings/employee', {
+      // Load available tables
+      const tablesResult = await tryApiCall('/api/tables', {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
-      if (result.success) {
-        setBookings(result.data.bookings || []);
-      } else {
-        throw new Error(result.error || 'Không thể tải dữ liệu');
+      // Load menu items
+      const menuResult = await tryApiCall('/api/menu', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (tablesResult.success) {
+        const availableTables = (tablesResult.data || []).filter((table: Table) => table.status === 'empty');
+        setTables(availableTables);
+      }
+
+      if (menuResult.success) {
+        setMenuItems(menuResult.data || []);
       }
     } catch (error) {
-      console.error('Error loading bookings:', error);
-      Alert.alert('Lỗi', 'Không thể tải danh sách đặt bàn');
-      setBookings([]);
+      console.error('Error loading data:', error);
+      Alert.alert('Lỗi', 'Không thể tải dữ liệu');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const loadTables = async () => {
+  // Tìm kiếm khách hàng theo SĐT
+  const searchCustomerByPhone = async (phone: string) => {
+    if (!phone || phone.length < 8) {
+      setFoundCustomer(null);
+      setFoundCustomers([]);
+      setShowCustomerList(false);
+      return;
+    }
+
+    setSearching(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall('/api/tables', {
+      const result = await tryApiCall(`/api/bookings/search-customers?phone=${encodeURIComponent(phone)}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (result.success) {
-        setTables(result.data || []);
+        const customers = result.data.customers || [];
+        
+        if (customers.length === 1) {
+          // Chỉ có 1 khách hàng - tự động chọn
+          const customer = customers[0];
+          setFoundCustomer(customer);
+          setFoundCustomers([]);
+          setShowCustomerList(false);
+          setFormData(prev => ({
+            ...prev,
+            customerId: customer._id,
+            customerName: customer.fullName,
+            customerPhone: customer.phone,
+          }));
+        } else if (customers.length > 1) {
+          // Có nhiều khách hàng - hiển thị danh sách
+          setFoundCustomers(customers);
+          setFoundCustomer(null);
+          setShowCustomerList(true);
+        } else {
+          // Không tìm thấy - đặt bàn nhanh
+          setFoundCustomer(null);
+          setFoundCustomers([]);
+          setShowCustomerList(false);
+          setFormData(prev => ({
+            ...prev,
+            customerId: '',
+            customerName: '',
+            customerPhone: phone,
+          }));
+        }
       }
     } catch (error) {
-      console.error('Error loading tables:', error);
+      console.error('Error searching customer:', error);
+    } finally {
+      setSearching(false);
     }
   };
 
-  const searchCustomers = async (query: string) => {
-    if (query.length < 2) {
-      setCustomers([]);
+  const handleCustomerSelect = (customer: Customer) => {
+    setFormData(prev => ({
+      ...prev,
+      customerId: customer._id,
+      customerName: customer.fullName,
+      customerPhone: customer.phone,
+    }));
+    setFoundCustomer(customer);
+    setFoundCustomers([]);
+    setShowCustomerList(false);
+  };
+
+  const handleQuickBookingName = (name: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customerName: name,
+      customerId: '',
+    }));
+  };
+
+  const handleTableSelect = (table: Table) => {
+    setFormData(prev => ({
+      ...prev,
+      tableId: table._id,
+      tableName: table.name,
+    }));
+  };
+
+  const handleMenuSelect = (menuItem: MenuItem) => {
+    const existingItem = selectedMenuItems.find(item => item.item._id === menuItem._id);
+    if (existingItem) {
+      setSelectedMenuItems(prev => 
+        prev.map(item => 
+          item.item._id === menuItem._id 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      setSelectedMenuItems(prev => [...prev, { item: menuItem, quantity: 1 }]);
+    }
+  };
+
+  const handleMenuQuantityChange = (menuItemId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setSelectedMenuItems(prev => prev.filter(item => item.item._id !== menuItemId));
+    } else {
+      setSelectedMenuItems(prev => 
+        prev.map(item => 
+          item.item._id === menuItemId 
+            ? { ...item, quantity }
+            : item
+        )
+      );
+    }
+  };
+
+  const calculateTotalAmount = () => {
+    return selectedMenuItems.reduce((total, item) => total + (item.item.price * item.quantity), 0);
+  };
+
+  // Tạo QR code thanh toán cọc
+  const generateQRCode = async (booking: any) => {
+    try {
+      setQrLoading(true);
+      setPaymentStatus('pending');
+      console.log('🔄 Đang tạo QR code cho booking:', booking);
+      
+      // Thông tin thanh toán
+      const paymentInfo = {
+        accountNumber: '2246811357',
+        accountName: 'DANG GIA HY',
+        bankCode: '970407',
+        amount: booking.depositAmount || booking.booking?.depositAmount,
+        description: `Coc ban ${booking.tableName || booking.booking?.tableName}`
+      };
+
+      console.log('💳 Payment info:', paymentInfo);
+
+      // Thử gọi API backend trước
+      try {
+        const result = await tryApiCall('/api/payment/generate-qr', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(paymentInfo)
+        });
+
+        if (result.success && result.data && result.data.qrCode) {
+          setQrCode(result.data.qrCode);
+          console.log('✅ QR code từ API:', result.data.qrCode);
+        } else {
+          throw new Error('API response invalid');
+        }
+      } catch (apiError) {
+        console.warn('⚠️ API error, tạo QR trực tiếp:', apiError);
+        // Fallback: Tạo QR code trực tiếp với VietQR API
+        const directQRUrl = `https://img.vietqr.io/image/${paymentInfo.bankCode}-${paymentInfo.accountNumber}-compact2.png?amount=${paymentInfo.amount}&addInfo=${encodeURIComponent(paymentInfo.description)}&accountName=${encodeURIComponent(paymentInfo.accountName)}`;
+        setQrCode(directQRUrl);
+        console.log('✅ QR code trực tiếp:', directQRUrl);
+      }
+      
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      Alert.alert('Lỗi', 'Không thể tạo QR code thanh toán');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  // Kiểm tra trạng thái thanh toán
+  const checkPaymentStatus = async () => {
+    if (!currentBooking) return;
+    
+    try {
+      setCheckingPayment(true);
+      setPaymentStatus('checking');
+      
+      const token = await AsyncStorage.getItem('userToken');
+      const result = await tryApiCall(`/api/payment/check-status/${currentBooking._id}`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (result.success) {
+        if (result.data.paid) {
+          setPaymentStatus('paid');
+          Alert.alert('✅ Thành công', 'Đã xác nhận thanh toán cọc!');
+        } else {
+          setPaymentStatus('failed');
+          Alert.alert('❌ Chưa thanh toán', 'Chưa nhận được thanh toán cọc từ ngân hàng');
+        }
+      } else {
+        setPaymentStatus('failed');
+        Alert.alert('❌ Lỗi', result.message || 'Không thể kiểm tra trạng thái thanh toán');
+      }
+    } catch (error) {
+      console.error('Error checking payment:', error);
+      setPaymentStatus('failed');
+      Alert.alert('❌ Lỗi', 'Không thể kiểm tra trạng thái thanh toán');
+    } finally {
+      setCheckingPayment(false);
+    }
+  };
+
+  // Xác nhận thanh toán thủ công
+  const confirmPaymentManually = async () => {
+    if (!currentBooking) return;
+    
+    Alert.alert(
+      'Xác nhận thanh toán thủ công',
+      `Bạn có chắc chắn khách hàng đã thanh toán cọc ${currentBooking.depositAmount?.toLocaleString()}đ?\n\nSau khi xác nhận, đặt bàn sẽ được kích hoạt ngay lập tức.`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xác nhận',
+          onPress: async () => {
+            try {
+              setCheckingPayment(true);
+              const token = await AsyncStorage.getItem('userToken');
+              
+              const result = await tryApiCall(`/api/payment/confirm-manual/${currentBooking._id}`, {
+                method: 'POST',
+                headers: { 
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  amount: currentBooking.depositAmount,
+                  transactionType: 'deposit'
+                })
+              });
+
+              if (result.success) {
+                setPaymentStatus('paid');
+                Alert.alert('✅ Thành công', result.message || 'Đã xác nhận thanh toán cọc thủ công!');
+              } else {
+                Alert.alert('❌ Lỗi', result.message || 'Không thể xác nhận thanh toán');
+              }
+            } catch (error) {
+              console.error('Error confirming payment:', error);
+              Alert.alert('❌ Lỗi', 'Không thể xác nhận thanh toán');
+            } finally {
+              setCheckingPayment(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.customerName || !formData.tableId) {
+      Alert.alert('Lỗi', 'Vui lòng nhập tên khách hàng và chọn bàn');
+      return;
+    }
+
+    if (formData.numberOfGuests < 1) {
+      Alert.alert('Lỗi', 'Số lượng khách phải lớn hơn 0');
+      return;
+    }
+
+    if (formData.depositAmount < 50000) {
+      Alert.alert('Lỗi', 'Số tiền cọc tối thiểu là 50,000đ');
       return;
     }
 
     try {
+      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/search-customers?name=${encodeURIComponent(query)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      
+      const totalAmount = calculateTotalAmount();
+      
+      const bookingData = {
+        tableId: formData.tableId,
+        numberOfGuests: formData.numberOfGuests,
+        bookingDate: formData.bookingDate,
+        bookingTime: formData.bookingTime,
+        menuItems: selectedMenuItems.map(item => ({
+          itemId: item.item._id,
+          quantity: item.quantity
+        })),
+        notes: formData.note,
+        depositAmount: Math.max(formData.depositAmount, 50000), // Đảm bảo tối thiểu 50,000đ
+        // Thêm thông tin khách hàng nếu có
+        ...(formData.customerId ? {
+          customer: formData.customerId
+        } : {
+          customerInfo: {
+            fullName: formData.customerName,
+            phone: formData.customerPhone,
+            email: ''
+          }
+        })
+      };
 
-      if (result.success) {
-        setCustomers(result.data.customers || []);
-      }
-    } catch (error) {
-      console.error('Error searching customers:', error);
-    }
-  };
+      console.log('📤 Sending booking data:', bookingData);
 
-  const confirmBooking = async (bookingId: string) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${bookingId}/confirm`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          paymentMethod: 'cash',
-          depositAmount: 0,
-        }),
-      });
-
-      if (result.success) {
-        Alert.alert('Thành công', 'Đã xác nhận đặt bàn');
-        loadBookings();
-      } else {
-        Alert.alert('Lỗi', result.error || 'Không thể xác nhận đặt bàn');
-      }
-    } catch (error) {
-      console.error('Error confirming booking:', error);
-      Alert.alert('Lỗi', 'Không thể xác nhận đặt bàn');
-    }
-  };
-
-  const cancelBooking = async (bookingId: string) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall(`/api/bookings/${bookingId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          reason: 'Hủy bởi nhân viên',
-        }),
-      });
-
-      if (result.success) {
-        Alert.alert('Thành công', 'Đã hủy đặt bàn');
-        loadBookings();
-      } else {
-        Alert.alert('Lỗi', result.error || 'Không thể hủy đặt bàn');
-      }
-    } catch (error) {
-      console.error('Error cancelling booking:', error);
-      Alert.alert('Lỗi', 'Không thể hủy đặt bàn');
-    }
-  };
-
-  const createQuickBooking = async () => {
-    if (!quickBookingForm.customerPhone || !quickBookingForm.tableId) {
-      Alert.alert('Lỗi', 'Vui lòng điền đầy đủ thông tin bắt buộc');
-      return;
-    }
-
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      const result = await tryApiCall('/api/bookings/admin-quick-booking', {
+      const result = await tryApiCall('/api/bookings', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          customerId: selectedCustomer?._id || null,
-          customerName: quickBookingForm.customerName,
-          customerPhone: quickBookingForm.customerPhone,
-          customerEmail: quickBookingForm.customerEmail,
-          tableId: quickBookingForm.tableId,
-          numberOfGuests: quickBookingForm.numberOfGuests,
-          bookingDate: quickBookingForm.bookingDate,
-          bookingTime: quickBookingForm.bookingTime,
-          specialRequests: quickBookingForm.specialRequests,
-          depositAmount: parseInt(quickBookingForm.depositAmount),
-        }),
+        body: JSON.stringify(bookingData),
       });
 
+      console.log('📥 Booking response:', result);
+
       if (result.success) {
-        Alert.alert('Thành công', 'Đã tạo đặt bàn thành công');
-        setShowQuickBooking(false);
-        setQuickBookingForm({
-          customerName: '',
-          customerPhone: '',
-          customerEmail: '',
-          tableId: '',
-          numberOfGuests: 1,
-          bookingDate: new Date().toISOString().split('T')[0],
-          bookingTime: new Date().toTimeString().slice(0, 5),
-          specialRequests: '',
-          depositAmount: '50000',
+        // Lưu thông tin booking để hiển thị QR code
+        setCurrentBooking({
+          ...result.booking,
+          tableName: formData.tableName,
+          customerName: formData.customerName
         });
-        setSelectedCustomer(null);
-        loadBookings();
+        
+        // Hiển thị modal QR code
+        setShowQRModal(true);
+        
+        // Tạo QR code
+        await generateQRCode({
+          ...result.booking,
+          tableName: formData.tableName,
+          depositAmount: result.booking.depositAmount
+        });
       } else {
+        console.error('Booking error:', result.error);
         Alert.alert('Lỗi', result.error || 'Không thể tạo đặt bàn');
       }
     } catch (error) {
-      console.error('Error creating quick booking:', error);
+      console.error('Error creating booking:', error);
       Alert.alert('Lỗi', 'Không thể tạo đặt bàn');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return Colors.light.warning;
-      case 'confirmed': return Colors.light.success;
-      case 'cancelled': return Colors.light.error;
-      default: return Colors.light.icon;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Chờ xác nhận';
-      case 'confirmed': return 'Đã xác nhận';
-      case 'cancelled': return 'Đã hủy';
-      default: return status;
-    }
-  };
-
-  const filteredBookings = bookings.filter(booking => {
-    if (filter === 'all') return true;
-    return booking.status === filter;
-  });
-
-  const availableTables = tables.filter(table => table.status === 'empty');
-
-  const renderBooking = ({ item }: { item: Booking }) => (
-    <View style={styles.bookingCard}>
-      <View style={styles.bookingHeader}>
-        <Text style={styles.customerName}>
-          {item.customerInfo?.fullName || item.customer.fullName}
-        </Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.bookingInfo}>
-        <View style={styles.infoRow}>
-          <Ionicons name="restaurant" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>Bàn: {item.table.name}</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="people" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>{item.numberOfGuests} người</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="calendar" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>
-            {new Date(item.bookingDate).toLocaleDateString('vi-VN')} {item.bookingTime}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="call" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>
-            {item.customerInfo?.phone || item.customer.phone}
-          </Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Ionicons name="cash" size={16} color={Colors.light.icon} />
-          <Text style={styles.infoText}>
-            {item.totalAmount.toLocaleString()}đ
-            {item.depositAmount > 0 && ` (Cọc: ${item.depositAmount.toLocaleString()}đ)`}
-          </Text>
-        </View>
-      </View>
-
-      {item.status === 'pending' && (
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.confirmButton]}
-            onPress={() => confirmBooking(item._id)}
-          >
-            <Ionicons name="checkmark" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Xác nhận</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.cancelButton]}
-            onPress={() => cancelBooking(item._id)}
-          >
-            <Ionicons name="close" size={16} color="#fff" />
-            <Text style={styles.actionButtonText}>Hủy</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
-  useEffect(() => {
-    loadBookings();
-    loadTables();
-  }, []);
-
-  useEffect(() => {
-    if (searchText) {
-      searchCustomers(searchText);
-    } else {
-      setCustomers([]);
-    }
-  }, [searchText]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadBookings();
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header with Quick Booking Button */}
+    <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Quản lý đặt bàn</Text>
-          <TouchableOpacity
-            style={styles.quickBookingButton}
-            onPress={() => setShowQuickBooking(true)}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.quickBookingText}>Đặt bàn nhanh</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Đặt bàn cho khách</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {['all', 'pending', 'confirmed', 'cancelled'].map((filterType) => (
-          <TouchableOpacity
-            key={filterType}
-            style={[
-              styles.filterButton,
-              filter === filterType && styles.activeFilterButton
-            ]}
-            onPress={() => setFilter(filterType as any)}
-          >
-            <Text style={[
-              styles.filterText,
-              filter === filterType && styles.activeFilterText
-            ]}>
-              {filterType === 'all' ? 'Tất cả' : 
-               filterType === 'pending' ? 'Chờ xác nhận' :
-               filterType === 'confirmed' ? 'Đã xác nhận' : 'Đã hủy'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <View style={styles.content}>
+        {/* Customer Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
+          
+          {/* Phone Number Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Số điện thoại *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.customerPhone}
+              onChangeText={(phone) => {
+                setFormData(prev => ({ ...prev, customerPhone: phone }));
+                searchCustomerByPhone(phone);
+              }}
+              placeholder="Nhập số điện thoại để tìm kiếm..."
+              keyboardType="phone-pad"
+            />
+            {searching && (
+              <Text style={styles.searchingText}>Đang tìm kiếm...</Text>
+            )}
+          </View>
 
-      {/* Statistics */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{bookings.filter(b => b.status === 'pending').length}</Text>
-          <Text style={styles.statLabel}>Chờ xác nhận</Text>
+          {/* Customer Name Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Tên khách hàng *</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.customerName}
+              onChangeText={handleQuickBookingName}
+              placeholder="Nhập tên khách hàng"
+            />
+          </View>
+
+          {/* Found Customer Display */}
+          {foundCustomer && (
+            <View style={styles.foundCustomerContainer}>
+              <View style={styles.foundCustomerInfo}>
+                <View style={styles.customerAvatar}>
+                  <Text style={styles.customerAvatarText}>
+                    {foundCustomer.fullName.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.customerDetails}>
+                  <Text style={styles.customerName}>{foundCustomer.fullName}</Text>
+                  <Text style={styles.customerPhone}>{foundCustomer.phone}</Text>
+                  {foundCustomer.email && (
+                    <Text style={styles.customerEmail}>{foundCustomer.email}</Text>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setFoundCustomer(null);
+                  setFormData(prev => ({
+                    ...prev,
+                    customerId: '',
+                    customerName: '',
+                    customerPhone: '',
+                  }));
+                }}
+                style={styles.clearButton}
+              >
+                <Ionicons name="close" size={20} color={Colors.light.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Customer List (multiple results) */}
+          {showCustomerList && foundCustomers.length > 0 && (
+            <View style={styles.customerListContainer}>
+              <Text style={styles.customerListTitle}>Chọn khách hàng ({foundCustomers.length})</Text>
+              {foundCustomers.map((customer) => (
+                <TouchableOpacity
+                  key={customer._id}
+                  style={styles.customerListItem}
+                  onPress={() => handleCustomerSelect(customer)}
+                >
+                  <View style={styles.customerAvatar}>
+                    <Text style={styles.customerAvatarText}>
+                      {customer.fullName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.customerDetails}>
+                    <Text style={styles.customerName}>{customer.fullName}</Text>
+                    <Text style={styles.customerPhone}>{customer.phone}</Text>
+                    {customer.email && (
+                      <Text style={styles.customerEmail}>{customer.email}</Text>
+                    )}
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{bookings.filter(b => b.status === 'confirmed').length}</Text>
-          <Text style={styles.statLabel}>Đã xác nhận</Text>
+
+        {/* Table Selection */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Chọn bàn</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tablesContainer}>
+            {tables.map((table) => (
+              <TouchableOpacity
+                key={table._id}
+                style={[
+                  styles.tableCard,
+                  formData.tableId === table._id && styles.selectedTableCard
+                ]}
+                onPress={() => handleTableSelect(table)}
+              >
+                <Text style={[
+                  styles.tableName,
+                  formData.tableId === table._id && styles.selectedTableName
+                ]}>
+                  {table.name}
+                </Text>
+                <Text style={[
+                  styles.tableCapacity,
+                  formData.tableId === table._id && styles.selectedTableCapacity
+                ]}>
+                  {table.capacity} người
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>
-            {bookings.reduce((sum, b) => sum + b.totalAmount, 0).toLocaleString()}đ
+
+        {/* Number of Guests */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Số lượng khách</Text>
+          <View style={styles.guestsContainer}>
+            <TouchableOpacity
+              style={styles.guestButton}
+              onPress={() => setFormData(prev => ({
+                ...prev,
+                numberOfGuests: Math.max(1, prev.numberOfGuests - 1)
+              }))}
+            >
+              <Ionicons name="remove" size={20} color={Colors.light.primary} />
+            </TouchableOpacity>
+            <Text style={styles.guestNumber}>{formData.numberOfGuests}</Text>
+            <TouchableOpacity
+              style={styles.guestButton}
+              onPress={() => setFormData(prev => ({
+                ...prev,
+                numberOfGuests: prev.numberOfGuests + 1
+              }))}
+            >
+              <Ionicons name="add" size={20} color={Colors.light.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Date and Time */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ngày và giờ</Text>
+          <View style={styles.dateTimeContainer}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Ngày</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.bookingDate}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, bookingDate: text }))}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Giờ</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.bookingTime}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, bookingTime: text }))}
+                placeholder="HH:MM"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Menu Selection */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Chọn món ăn</Text>
+            <TouchableOpacity
+              style={styles.menuButton}
+              onPress={() => setShowMenuModal(true)}
+            >
+              <Text style={styles.menuButtonText}>
+                {selectedMenuItems.length > 0 ? `${selectedMenuItems.length} món` : 'Chọn món'}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.light.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Selected Menu Items */}
+          {selectedMenuItems.length > 0 && (
+            <View style={styles.selectedMenuContainer}>
+              {selectedMenuItems.map((item, index) => (
+                <View key={item.item._id} style={styles.selectedMenuItem}>
+                  <View style={styles.menuItemInfo}>
+                    <Text style={styles.menuItemName}>{item.item.name}</Text>
+                    <Text style={styles.menuItemPrice}>
+                      {item.item.price.toLocaleString()}đ x {item.quantity}
+                    </Text>
+                  </View>
+                  <View style={styles.quantityControls}>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => handleMenuQuantityChange(item.item._id, item.quantity - 1)}
+                    >
+                      <Ionicons name="remove" size={16} color={Colors.light.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.quantityText}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.quantityButton}
+                      onPress={() => handleMenuQuantityChange(item.item._id, item.quantity + 1)}
+                    >
+                      <Ionicons name="add" size={16} color={Colors.light.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+              
+              {/* Total Amount */}
+              <View style={styles.totalAmountContainer}>
+                <Text style={styles.totalAmountLabel}>Tổng tiền món:</Text>
+                <Text style={styles.totalAmountValue}>
+                  {calculateTotalAmount().toLocaleString()}đ
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Deposit Amount */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tiền cọc (VNĐ) *</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.depositAmount.toString()}
+            onChangeText={(text) => setFormData(prev => ({ 
+              ...prev, 
+              depositAmount: parseInt(text) || 50000 
+            }))}
+            keyboardType="numeric"
+            placeholder="50000"
+          />
+          <Text style={styles.helpText}>Tối thiểu: 50,000đ</Text>
+        </View>
+
+        {/* Note */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ghi chú</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={formData.note}
+            onChangeText={(text) => setFormData(prev => ({ ...prev, note: text }))}
+            placeholder="Yêu cầu đặc biệt..."
+            multiline
+            numberOfLines={3}
+          />
+        </View>
+
+        {/* Submit Button */}
+        <TouchableOpacity
+          style={[styles.submitButton, loading && styles.disabledButton]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          <Text style={styles.submitButtonText}>
+            {loading ? 'Đang tạo...' : 'Tạo đặt bàn'}
           </Text>
-          <Text style={styles.statLabel}>Tổng doanh thu</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Bookings List */}
-      <FlatList
-        data={filteredBookings}
-        renderItem={renderBooking}
-        keyExtractor={(item) => item._id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
-
-      {/* Quick Booking Modal */}
+      {/* Menu Selection Modal */}
       <Modal
-        visible={showQuickBooking}
+        visible={showMenuModal}
         animationType="slide"
         presentationStyle="pageSheet"
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Đặt bàn nhanh</Text>
-            <TouchableOpacity
-              onPress={() => setShowQuickBooking(false)}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color={Colors.light.text} />
+            <TouchableOpacity onPress={() => setShowMenuModal(false)}>
+              <Text style={styles.modalCancelText}>Hủy</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Chọn món ăn</Text>
+            <TouchableOpacity onPress={() => setShowMenuModal(false)}>
+              <Text style={styles.modalDoneText}>Xong</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
-            {/* Customer Search */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Tìm khách hàng (tùy chọn)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập tên hoặc số điện thoại..."
-                value={searchText}
-                onChangeText={setSearchText}
-                onFocus={() => setShowCustomerSearch(true)}
-              />
-              {showCustomerSearch && customers.length > 0 && (
-                <View style={styles.customerList}>
-                  {customers.map((customer) => (
+          <FlatList
+            data={menuItems}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item }) => {
+              const selectedItem = selectedMenuItems.find(selected => selected.item._id === item._id);
+              const quantity = selectedItem ? selectedItem.quantity : 0;
+              
+              return (
+                <View style={styles.menuItemCard}>
+                  <View style={styles.menuItemInfo}>
+                    <Text style={styles.menuItemName}>{item.name}</Text>
+                    <Text style={styles.menuItemDescription}>{item.description}</Text>
+                    <Text style={styles.menuItemPrice}>{item.price.toLocaleString()}đ</Text>
+                  </View>
+                  <View style={styles.menuItemControls}>
+                    {quantity > 0 && (
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => handleMenuQuantityChange(item._id, quantity - 1)}
+                      >
+                        <Ionicons name="remove" size={16} color={Colors.light.primary} />
+                      </TouchableOpacity>
+                    )}
+                    {quantity > 0 && (
+                      <Text style={styles.quantityText}>{quantity}</Text>
+                    )}
                     <TouchableOpacity
-                      key={customer._id}
-                      style={styles.customerItem}
-                      onPress={() => {
-                        setSelectedCustomer(customer);
-                        setQuickBookingForm(prev => ({
-                          ...prev,
-                          customerName: customer.fullName,
-                          customerPhone: customer.phone,
-                          customerEmail: customer.email,
-                        }));
-                        setSearchText('');
-                        setShowCustomerSearch(false);
-                      }}
+                      style={styles.addButton}
+                      onPress={() => handleMenuSelect(item)}
                     >
-                      <Text style={styles.customerName}>{customer.fullName}</Text>
-                      <Text style={styles.customerPhone}>{customer.phone}</Text>
+                      <Ionicons 
+                        name={quantity > 0 ? "add" : "add-circle-outline"} 
+                        size={20} 
+                        color={Colors.light.primary} 
+                      />
                     </TouchableOpacity>
-                  ))}
+                  </View>
+                </View>
+              );
+            }}
+          />
+        </View>
+      </Modal>
+
+      {/* QR Code Payment Modal */}
+      <Modal
+        visible={showQRModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowQRModal(false)}
+      >
+        <View style={styles.qrModalOverlay}>
+          <View style={styles.qrModalContainer}>
+            {/* Header */}
+            <View style={styles.qrModalHeader}>
+              <View style={styles.qrHeaderContent}>
+                <Text style={styles.qrModalTitle}>💳 THANH TOÁN CỌC</Text>
+                <Text style={styles.qrAmountText}>
+                  {currentBooking?.depositAmount?.toLocaleString()}đ
+                </Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setShowQRModal(false)} 
+                style={styles.qrCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              style={styles.qrModalContent} 
+              contentContainerStyle={styles.qrModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Payment Status */}
+              <View style={styles.paymentStatusContainer}>
+                <View style={[
+                  styles.statusIndicator,
+                  paymentStatus === 'paid' && styles.statusPaid,
+                  paymentStatus === 'checking' && styles.statusChecking,
+                  paymentStatus === 'failed' && styles.statusFailed
+                ]}>
+                  <Ionicons 
+                    name={
+                      paymentStatus === 'paid' ? 'checkmark-circle' :
+                      paymentStatus === 'checking' ? 'time' :
+                      paymentStatus === 'failed' ? 'close-circle' : 'ellipse-outline'
+                    } 
+                    size={20} 
+                    color={
+                      paymentStatus === 'paid' ? '#27ae60' :
+                      paymentStatus === 'checking' ? '#f39c12' :
+                      paymentStatus === 'failed' ? '#e74c3c' : '#95a5a6'
+                    } 
+                  />
+                  <Text style={[
+                    styles.statusText,
+                    paymentStatus === 'paid' && styles.statusTextPaid,
+                    paymentStatus === 'checking' && styles.statusTextChecking,
+                    paymentStatus === 'failed' && styles.statusTextFailed
+                  ]}>
+                    {paymentStatus === 'paid' ? 'Đã thanh toán' :
+                     paymentStatus === 'checking' ? 'Đang kiểm tra...' :
+                     paymentStatus === 'failed' ? 'Chưa thanh toán' : 'Chờ thanh toán'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* QR Code */}
+              {qrLoading ? (
+                <View style={styles.qrLoadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.light.primary} />
+                  <Text style={styles.qrLoadingText}>Đang tạo QR code...</Text>
+                </View>
+              ) : qrCode ? (
+                <View style={styles.qrCodeContainer}>
+                  <Image 
+                    source={{ uri: qrCode }} 
+                    style={styles.qrCodeImage}
+                    resizeMode="contain"
+                    onError={(error) => {
+                      console.error('QR Code load error:', error);
+                      Alert.alert('Lỗi', 'Không thể tải QR code');
+                    }}
+                  />
+                  <Text style={styles.qrInstructionText}>
+                    Quét mã QR để thanh toán
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.qrErrorContainer}>
+                  <Ionicons name="alert-circle" size={48} color="#e74c3c" />
+                  <Text style={styles.qrErrorText}>Không thể tạo QR code</Text>
                 </View>
               )}
-            </View>
 
-            {/* Customer Info */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Tên khách hàng *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập tên khách hàng"
-                value={quickBookingForm.customerName}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, customerName: text }))}
-              />
-            </View>
+              {/* Bank Info - Compact */}
+              <View style={styles.qrInfoContainer}>
+                <View style={styles.bankInfoRow}>
+                  <Ionicons name="business" size={16} color="#666" />
+                  <Text style={styles.qrInfoText}>Techcombank</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Ionicons name="card" size={16} color="#666" />
+                  <Text style={styles.qrInfoText}>2246811357</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Ionicons name="person" size={16} color="#666" />
+                  <Text style={styles.qrInfoText}>DANG GIA HY</Text>
+                </View>
+                <View style={styles.bankInfoRow}>
+                  <Ionicons name="document-text" size={16} color="#666" />
+                  <Text style={styles.qrInfoText}>Coc ban {currentBooking?.tableName}</Text>
+                </View>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số điện thoại *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập số điện thoại"
-                value={quickBookingForm.customerPhone}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, customerPhone: text }))}
-                keyboardType="phone-pad"
-              />
-            </View>
+              {/* Action Buttons */}
+              <View style={styles.qrActionButtons}>
+                <TouchableOpacity 
+                  style={[styles.qrCheckButton, checkingPayment && styles.qrButtonDisabled]}
+                  onPress={checkPaymentStatus}
+                  disabled={checkingPayment || paymentStatus === 'paid'}
+                >
+                  <Ionicons 
+                    name={checkingPayment ? "hourglass" : "refresh"} 
+                    size={20} 
+                    color="white" 
+                  />
+                  <Text style={styles.qrCheckButtonText}>
+                    {checkingPayment ? 'Đang kiểm tra...' : 'KIỂM TRA'}
+                  </Text>
+                </TouchableOpacity>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Nhập email (tùy chọn)"
-                value={quickBookingForm.customerEmail}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, customerEmail: text }))}
-                keyboardType="email-address"
-              />
-            </View>
+                <TouchableOpacity 
+                  style={[styles.qrConfirmButton, checkingPayment && styles.qrButtonDisabled]}
+                  onPress={confirmPaymentManually}
+                  disabled={checkingPayment || paymentStatus === 'paid'}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="white" />
+                  <Text style={styles.qrConfirmButtonText}>XÁC NHẬN THỦ CÔNG</Text>
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Chọn bàn *</Text>
-              <View style={styles.tableGrid}>
-                {availableTables.map((table) => (
-                  <TouchableOpacity
-                    key={table._id}
-                    style={[
-                      styles.tableOption,
-                      quickBookingForm.tableId === table._id && styles.selectedTableOption
-                    ]}
-                    onPress={() => setQuickBookingForm(prev => ({ ...prev, tableId: table._id }))}
+              {/* Test Button - Chỉ hiển thị khi chưa thanh toán */}
+              {paymentStatus !== 'paid' && (
+                <View style={styles.qrTestButtons}>
+                  <TouchableOpacity 
+                    style={[styles.qrTestButton, checkingPayment && styles.qrButtonDisabled]}
+                    onPress={async () => {
+                      if (!currentBooking) return;
+                      
+                      try {
+                        setCheckingPayment(true);
+                        const result = await tryApiCall('/api/payment/webhook-simulation', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            bookingId: currentBooking._id,
+                            amount: currentBooking.depositAmount,
+                            transactionType: 'deposit'
+                          })
+                        });
+
+                        if (result.success) {
+                          setPaymentStatus('paid');
+                          Alert.alert('🤖 Test thành công', 'Hệ thống đã tự động nhận thanh toán!');
+                        } else {
+                          Alert.alert('❌ Test thất bại', result.message || 'Không thể test thanh toán tự động');
+                        }
+                      } catch (error) {
+                        console.error('Error testing auto payment:', error);
+                        Alert.alert('❌ Lỗi', 'Không thể test thanh toán tự động');
+                      } finally {
+                        setCheckingPayment(false);
+                      }
+                    }}
+                    disabled={checkingPayment}
                   >
-                    <Text style={[
-                      styles.tableOptionText,
-                      quickBookingForm.tableId === table._id && styles.selectedTableOptionText
-                    ]}>
-                      {table.name}
-                    </Text>
-                    <Text style={[
-                      styles.tableOptionSubtext,
-                      quickBookingForm.tableId === table._id && styles.selectedTableOptionSubtext
-                    ]}>
-                      {table.capacity} người
-                    </Text>
+                    <Ionicons name="flash" size={16} color="white" />
+                    <Text style={styles.qrTestButtonText}>TEST TỰ ĐỘNG</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                </View>
+              )}
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số khách *</Text>
-              <View style={styles.guestSelector}>
-                <TouchableOpacity
-                  style={styles.guestButton}
-                  onPress={() => setQuickBookingForm(prev => ({ 
-                    ...prev, 
-                    numberOfGuests: Math.max(1, prev.numberOfGuests - 1) 
-                  }))}
+              {/* Bottom Buttons */}
+              <View style={styles.qrModalButtons}>
+                <TouchableOpacity 
+                  style={styles.qrCancelButton}
+                  onPress={() => setShowQRModal(false)}
                 >
-                  <Ionicons name="remove" size={20} color={Colors.light.primary} />
+                  <Text style={styles.qrCancelButtonText}>Đóng</Text>
                 </TouchableOpacity>
-                <Text style={styles.guestNumber}>{quickBookingForm.numberOfGuests}</Text>
-                <TouchableOpacity
-                  style={styles.guestButton}
-                  onPress={() => setQuickBookingForm(prev => ({ 
-                    ...prev, 
-                    numberOfGuests: Math.min(20, prev.numberOfGuests + 1) 
-                  }))}
-                >
-                  <Ionicons name="add" size={20} color={Colors.light.primary} />
-                </TouchableOpacity>
+                {paymentStatus === 'paid' && (
+                  <TouchableOpacity 
+                    style={styles.qrDoneButton}
+                    onPress={() => {
+                      setShowQRModal(false);
+                      router.back();
+                    }}
+                  >
+                    <Text style={styles.qrDoneButtonText}>Hoàn thành</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Ngày đặt bàn *</Text>
-              <TextInput
-                style={styles.input}
-                value={quickBookingForm.bookingDate}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, bookingDate: text }))}
-                placeholder="YYYY-MM-DD"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Giờ đặt bàn *</Text>
-              <TextInput
-                style={styles.input}
-                value={quickBookingForm.bookingTime}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, bookingTime: text }))}
-                placeholder="HH:MM"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Yêu cầu đặc biệt</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Nhập yêu cầu đặc biệt (tùy chọn)"
-                value={quickBookingForm.specialRequests}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, specialRequests: text }))}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Số tiền cọc (đ)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="50000"
-                value={quickBookingForm.depositAmount}
-                onChangeText={(text) => setQuickBookingForm(prev => ({ ...prev, depositAmount: text }))}
-                keyboardType="numeric"
-              />
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.cancelModalButton}
-              onPress={() => setShowQuickBooking(false)}
-            >
-              <Text style={styles.cancelModalButtonText}>Hủy</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.confirmModalButton}
-              onPress={createQuickBooking}
-            >
-              <Text style={styles.confirmModalButtonText}>Tạo đặt bàn</Text>
-            </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.backgroundSecondary,
+    backgroundColor: Colors.light.background,
   },
   header: {
     backgroundColor: Colors.light.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  headerContent: {
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  quickBookingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  quickBookingText: {
-    color: '#fff',
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.light.card,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  activeFilterButton: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    fontWeight: '500',
-  },
-  activeFilterText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.light.card,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.light.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-  },
-  listContainer: {
-    padding: 16,
-  },
-  bookingCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: Colors.light.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  bookingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  customerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.light.text,
+    color: 'white',
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  placeholder: {
+    width: 40,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+  content: {
+    padding: 20,
   },
-  bookingInfo: {
-    gap: 8,
+  section: {
+    marginBottom: 24,
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.light.text,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  confirmButton: {
-    backgroundColor: Colors.light.success,
-  },
-  cancelButton: {
-    backgroundColor: Colors.light.error,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  modalTitle: {
-    fontSize: 20,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: Colors.light.text,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalContent: {
-    flex: 1,
-    padding: 16,
+    marginBottom: 12,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: Colors.light.text,
     marginBottom: 8,
   },
   input: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: Colors.light.text,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: Colors.light.background,
   },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
+  searchingText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
-  customerList: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 8,
+  foundCustomerContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
     marginTop: 8,
-    maxHeight: 150,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  customerItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
+  foundCustomerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  customerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  customerAvatarText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  customerDetails: {
+    flex: 1,
   },
   customerName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: Colors.light.text,
+    marginBottom: 2,
   },
   customerPhone: {
     fontSize: 14,
     color: Colors.light.textSecondary,
-    marginTop: 2,
+    marginBottom: 2,
   },
-  tableGrid: {
+  customerEmail: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+  },
+  clearButton: {
+    padding: 8,
+  },
+  customerListContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  customerListTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  customerListItem: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
-  tableOption: {
-    padding: 12,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  menuButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    backgroundColor: Colors.light.background,
-    minWidth: 80,
+  },
+  menuButtonText: {
+    fontSize: 14,
+    color: Colors.light.text,
+    marginRight: 8,
+  },
+  selectedMenuContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  selectedMenuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  menuItemInfo: {
+    flex: 1,
+  },
+  menuItemName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  menuItemPrice: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+  },
+  quantityControls: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  selectedTableOption: {
-    backgroundColor: Colors.light.primary,
-    borderColor: Colors.light.primary,
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.light.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  tableOptionText: {
+  quantityText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    marginHorizontal: 12,
+  },
+  totalAmountContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  totalAmountLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: Colors.light.text,
   },
-  selectedTableOptionText: {
-    color: '#fff',
+  totalAmountValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.light.primary,
   },
-  tableOptionSubtext: {
+  tablesContainer: {
+    marginTop: 8,
+  },
+  tableCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.light.border,
+    minWidth: 80,
+  },
+  selectedTableCard: {
+    borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primary + '10',
+  },
+  tableName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  selectedTableName: {
+    color: Colors.light.primary,
+  },
+  tableCapacity: {
     fontSize: 12,
     color: Colors.light.textSecondary,
-    marginTop: 2,
   },
-  selectedTableOptionSubtext: {
-    color: 'rgba(255,255,255,0.8)',
+  selectedTableCapacity: {
+    color: Colors.light.primary,
   },
-  guestSelector: {
+  guestsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
   },
   guestButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.light.primaryLight,
+    backgroundColor: Colors.light.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   guestNumber: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: Colors.light.text,
-    minWidth: 40,
-    textAlign: 'center',
+    marginHorizontal: 20,
   },
-  modalFooter: {
+  dateTimeContainer: {
     flexDirection: 'row',
-    padding: 16,
     gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
   },
-  cancelModalButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    alignItems: 'center',
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
   },
-  cancelModalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-  },
-  confirmModalButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 8,
+  submitButton: {
     backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  disabledButton: {
+    backgroundColor: Colors.light.textSecondary,
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  modalHeader: {
+    backgroundColor: Colors.light.primary,
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalCancelText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  modalDoneText: {
+    color: Colors.light.primary,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  menuItemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  menuItemDescription: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: 4,
+  },
+  menuItemControls: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  confirmModalButtonText: {
-    fontSize: 16,
+  addButton: {
+    padding: 8,
+  },
+  helpText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  // QR Code Modal Styles
+  qrModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrModalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    margin: 16,
+    maxHeight: '90%',
+    width: '92%',
+    elevation: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    flexDirection: 'column',
+  },
+  qrModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    flexShrink: 0,
+  },
+  qrHeaderContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  qrModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.light.primary,
+    marginBottom: 4,
+  },
+  qrAmountText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  qrCloseButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  qrModalContent: {
+    flex: 1,
+  },
+  qrModalScrollContent: {
+    padding: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  // Payment Status
+  paymentStatusContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  statusPaid: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+  },
+  statusChecking: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffeaa7',
+  },
+  statusFailed: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+  },
+  statusText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
+    marginLeft: 8,
+    color: '#6c757d',
+  },
+  statusTextPaid: {
+    color: '#155724',
+  },
+  statusTextChecking: {
+    color: '#856404',
+  },
+  statusTextFailed: {
+    color: '#721c24',
+  },
+  // QR Code
+  qrLoadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  qrLoadingText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 16,
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    backgroundColor: '#f8f9fa',
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  qrCodeImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+  },
+  qrInstructionText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  qrErrorContainer: {
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  qrErrorText: {
+    fontSize: 16,
+    color: '#e74c3c',
+    marginTop: 12,
+    fontWeight: '500',
+  },
+  // Bank Info
+  qrInfoContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  bankInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  qrInfoText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  // Action Buttons
+  qrActionButtons: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 12,
+  },
+  qrCheckButton: {
+    flex: 1,
+    backgroundColor: '#3498db',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  qrCheckButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  qrConfirmButton: {
+    flex: 1,
+    backgroundColor: '#27ae60',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  qrConfirmButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  qrButtonDisabled: {
+    opacity: 0.6,
+  },
+  // Test Buttons
+  qrTestButtons: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  qrTestButton: {
+    backgroundColor: '#9b59b6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  qrTestButtonText: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  // Bottom Buttons
+  qrModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+  },
+  qrCancelButton: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  qrCancelButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  qrDoneButton: {
+    flex: 1,
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginLeft: 12,
+    alignItems: 'center',
+    elevation: 2,   
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  qrDoneButtonText: {
+    fontSize: 16,
+    color: 'white',
+    fontWeight: 'bold',
   },
 });

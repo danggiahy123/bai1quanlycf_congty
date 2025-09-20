@@ -8,7 +8,7 @@ cd backend
 npm install
 npm start
 ```
-- **URL**: http://192.168.5.162:5000
+- **URL**: http://192.168.5.117:5000
 - **Status**: ✅ Server chạy thành công
 
 ### **1.2 Khởi động Mobile App**
@@ -17,7 +17,7 @@ cd frontend/mobile
 npm install
 npm start
 ```
-- **URL**: http://192.168.5.162:8081
+- **URL**: http://192.168.5.117:8081
 - **QR Code**: Quét để truy cập trên điện thoại
 
 ### **1.3 Khởi động Web Admin**
@@ -26,7 +26,7 @@ cd webadmin
 npm install
 npm run dev
 ```
-- **URL**: http://192.168.5.162:5173
+- **URL**: http://192.168.5.117:5173
 - **Truy cập**: Trên máy tính
 
 ---
@@ -34,17 +34,17 @@ npm run dev
 ## 👥 **BƯỚC 2: PHÂN QUYỀN NGƯỜI DÙNG**
 
 ### **2.1 Tài khoản Admin (Web)**
-- **Truy cập**: http://192.168.5.162:5173
+- **Truy cập**: http://192.168.5.117:5173
 - **Chức năng**: Quản lý toàn bộ hệ thống
 - **Tạo tài khoản**: Sử dụng script `createAdmin.js`
 
 ### **2.2 Tài khoản Nhân viên (Mobile)**
-- **Truy cập**: http://192.168.5.162:8081
+- **Truy cập**: http://192.168.5.117:8081
 - **Chức năng**: Phục vụ khách hàng, quản lý bàn
 - **Tạo tài khoản**: Qua Web Admin
 
 ### **2.3 Tài khoản Khách hàng (Mobile)**
-- **Truy cập**: http://192.168.5.162:8081
+- **Truy cập**: http://192.168.5.117:8081
 - **Chức năng**: Đặt bàn, xem menu, thanh toán
 - **Đăng ký**: Tự động khi đặt bàn lần đầu
 
@@ -53,7 +53,7 @@ npm run dev
 ## 🍽️ **BƯỚC 3: QUY TRÌNH CHO KHÁCH HÀNG**
 
 ### **3.1 Đăng nhập**
-1. Mở mobile app: http://192.168.5.162:8081
+1. Mở mobile app: http://192.168.5.117:8081
 2. Chọn **"Đăng nhập khách hàng"**
 3. Nhập thông tin hoặc đăng ký mới
 
@@ -82,7 +82,7 @@ npm run dev
 ## 👨‍💼 **BƯỚC 4: QUY TRÌNH CHO NHÂN VIÊN**
 
 ### **4.1 Đăng nhập**
-1. Mở mobile app: http://192.168.5.162:8081
+1. Mở mobile app: http://192.168.5.117:8081
 2. Chọn **"Đăng nhập nhân viên"**
 3. Nhập username/password
 
@@ -121,7 +121,7 @@ npm run dev
 ## 🖥️ **BƯỚC 5: QUY TRÌNH CHO ADMIN (WEB)**
 
 ### **5.1 Đăng nhập Web Admin**
-1. Truy cập: http://192.168.5.162:5173
+1. Truy cập: http://192.168.5.117:5173
 2. Đăng nhập với tài khoản admin
 3. Truy cập dashboard chính
 

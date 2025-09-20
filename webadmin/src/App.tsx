@@ -198,12 +198,48 @@ export default function App() {
       loadStats();
     };
 
+    const handleManualPaymentConfirmed = (data: any) => {
+      console.log('💰 Manual payment confirmed:', data);
+      toast.success(`💰 ${data.message}`, {
+        icon: '✅',
+        style: {
+          background: '#10B981',
+          color: 'white',
+        },
+      });
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleQrPaymentConfirmed = (data: any) => {
+      console.log('📱 QR payment confirmed:', data);
+      toast.success(`📱 ${data.message}`, {
+        icon: '📱',
+        style: {
+          background: '#3B82F6',
+          color: 'white',
+        },
+      });
+      // Refresh bookings data if on bookings tab
+      if (tab === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
     // Listen for real-time events
     socket.on('table_status_changed', handleTableStatusChange);
     socket.on('booking_status_changed', handleBookingStatusChange);
     socket.on('booking_created', handleBookingCreated);
     socket.on('deposit_booking_created', handleDepositBookingCreated);
     socket.on('payment_confirmed', handlePaymentConfirmed);
+    socket.on('manual_payment_confirmed', handleManualPaymentConfirmed);
+    socket.on('qr_payment_confirmed', handleQrPaymentConfirmed);
     socket.on('order_status_changed', handleOrderStatusChange);
     socket.on('payment_status_changed', handlePaymentStatusChange);
     socket.on('new_notification', handleNewNotification);
@@ -214,6 +250,8 @@ export default function App() {
       socket.off('booking_created', handleBookingCreated);
       socket.off('deposit_booking_created', handleDepositBookingCreated);
       socket.off('payment_confirmed', handlePaymentConfirmed);
+      socket.off('manual_payment_confirmed', handleManualPaymentConfirmed);
+      socket.off('qr_payment_confirmed', handleQrPaymentConfirmed);
       socket.off('order_status_changed', handleOrderStatusChange);
       socket.off('payment_status_changed', handlePaymentStatusChange);
       socket.off('new_notification', handleNewNotification);
@@ -559,18 +597,6 @@ export default function App() {
             </h2>
             
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  className="w-64 px-4 py-2 bg-gray-800 text-white placeholder-gray-400 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                />
-                <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
               {tab==='menu' && (
                 <button
                   onClick={startCreate}

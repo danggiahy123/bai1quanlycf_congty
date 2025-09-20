@@ -90,17 +90,27 @@ router.get('/revenue', authenticateToken, async (req, res) => {
       case 'day':
         groupFormat = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
         dateFormat = '%Y-%m-%d';
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 ngày
+        // Chỉ lấy 7 ngày gần đây, bắt đầu từ hôm qua
+        startDate = new Date(now);
+        startDate.setDate(startDate.getDate() - 7);
+        startDate.setHours(0, 0, 0, 0);
         break;
       case 'week':
-        groupFormat = { $dateToString: { format: '%Y-W%U', date: '$createdAt' } };
+        // Tính tuần từ thứ 2 đến chủ nhật
+        groupFormat = { 
+          $dateToString: { 
+            format: '%Y-W%U', 
+            date: '$createdAt',
+            timezone: 'Asia/Ho_Chi_Minh'
+          } 
+        };
         dateFormat = '%Y-W%U';
-        startDate = new Date(now.getTime() - 4 * 7 * 24 * 60 * 60 * 1000); // 4 tuần
+        startDate = new Date(now.getTime() - 6 * 7 * 24 * 60 * 60 * 1000); // 6 tuần
         break;
       case 'month':
         groupFormat = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
         dateFormat = '%Y-%m';
-        startDate = new Date(now.getTime() - 12 * 30 * 24 * 60 * 60 * 1000); // 12 tháng
+        startDate = new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 tháng
         break;
       default:
         return res.status(400).json({ message: 'Range không hợp lệ' });
@@ -185,7 +195,7 @@ router.get('/recent-activities', authenticateToken, async (req, res) => {
       activities.push({
         _id: `booking_${booking._id}`,
         type: 'booking',
-        description: `Đặt bàn mới từ ${booking.customer.fullName}`,
+        description: `Đặt bàn mới từ ${booking.customer?.fullName || booking.customerInfo?.fullName || 'Khách hàng'}`,
         tableName: booking.table?.name,
         amount: booking.totalAmount,
         createdAt: booking.createdAt
