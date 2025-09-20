@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_API_URL } from '@/constants/api';
+import { FALLBACK_URLS } from '@/constants/api';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -24,6 +24,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeSocket = async () => {
       try {
+        // Đợi một chút để backend khởi động hoàn toàn
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         // Load user info from storage
         const storedUserInfo = await AsyncStorage.getItem('userInfo');
         const storedUserType = await AsyncStorage.getItem('userType');
@@ -33,10 +36,17 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
           setUserInfo({ ...user, userType: storedUserType });
           
           // Initialize socket connection
-          const newSocket = io(DEFAULT_API_URL, {
-            transports: ['websocket', 'polling'],
-            timeout: 20000,
+          const newSocket = io(FALLBACK_URLS[0], {
+            transports: ['polling'],
+            timeout: 30000,
             autoConnect: true,
+            reconnection: true,
+            reconnectionDelay: 3000,
+            reconnectionAttempts: 5,
+            maxReconnectionAttempts: 5,
+            forceNew: true,
+            upgrade: false,
+            rememberUpgrade: false
           });
 
           newSocket.on('connect', () => {

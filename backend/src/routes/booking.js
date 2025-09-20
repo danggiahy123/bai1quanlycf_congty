@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Booking = require('../models/Booking');
 const Customer = require('../models/Customer');
 const Table = require('../models/Table');
@@ -613,6 +614,11 @@ router.get('/employee', async (req, res) => {
 // Lấy booking theo table ID
 router.get('/by-table/:tableId', async (req, res) => {
   try {
+    // Kiểm tra tableId có phải ObjectId hợp lệ không
+    if (!mongoose.Types.ObjectId.isValid(req.params.tableId)) {
+      return res.status(400).json({ message: 'Table ID không hợp lệ' });
+    }
+
     const booking = await Booking.findOne({ 
       table: req.params.tableId, 
       status: { $in: ['confirmed', 'pending'] } 

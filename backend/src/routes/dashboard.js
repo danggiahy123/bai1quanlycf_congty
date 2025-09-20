@@ -6,6 +6,7 @@ const Customer = require('../models/Customer');
 const Employee = require('../models/Employee');
 const Menu = require('../models/Menu');
 const Booking = require('../models/Booking');
+const InventoryTransaction = require('../models/InventoryTransaction');
 const router = express.Router();
 
 // Middleware để xác thực token
@@ -193,7 +194,6 @@ router.get('/recent-activities', authenticateToken, async (req, res) => {
 
     // Lấy thanh toán gần đây
     const recentPayments = await Order.find({ status: 'paid' })
-      .populate('table', 'name')
       .sort({ updatedAt: -1 })
       .limit(parseInt(limit) / 4);
 
@@ -202,7 +202,7 @@ router.get('/recent-activities', authenticateToken, async (req, res) => {
         _id: `payment_${order._id}`,
         type: 'payment',
         description: `Thanh toán hoàn tất`,
-        tableName: order.table?.name,
+        tableName: order.tableName || `Bàn ${order.tableId}`,
         amount: order.totalAmount,
         createdAt: order.updatedAt
       });
@@ -210,7 +210,6 @@ router.get('/recent-activities', authenticateToken, async (req, res) => {
 
     // Lấy đơn hàng gần đây
     const recentOrders = await Order.find({ status: 'pending' })
-      .populate('table', 'name')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit) / 4);
 
@@ -219,7 +218,7 @@ router.get('/recent-activities', authenticateToken, async (req, res) => {
         _id: `order_${order._id}`,
         type: 'order',
         description: `Đơn hàng mới`,
-        tableName: order.table?.name,
+        tableName: order.tableName || `Bàn ${order.tableId}`,
         amount: order.totalAmount,
         createdAt: order.createdAt
       });
