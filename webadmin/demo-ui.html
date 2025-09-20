@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cafe Admin - UI Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cafe: {
+                            50: '#fef7ed',
+                            100: '#fdedd3',
+                            200: '#fbd9a5',
+                            300: '#f8c06d',
+                            400: '#f5a332',
+                            500: '#f28c0a',
+                            600: '#e37c00',
+                            700: '#bc5f00',
+                            800: '#954a00',
+                            900: '#7a3d00',
+                            950: '#421e00',
+                        }
+                    },
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'shimmer': 'shimmer 2s linear infinite',
+                        'gradient': 'gradient 15s ease infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(59, 130, 246, 0.2)' },
+                            '100%': { boxShadow: '0 0 20px rgba(59, 130, 246, 0.6)' },
+                        },
+                        shimmer: {
+                            '0%': { transform: 'translateX(-100%)' },
+                            '100%': { transform: 'translateX(100%)' },
+                        },
+                        gradient: {
+                            '0%, 100%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' },
+                        },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-blue-950 transition-all duration-500">
+    <!-- Demo Header -->
+    <div class="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-cafe-500 to-cafe-700 rounded-xl flex items-center justify-center shadow-lg">
+                        <span class="text-white font-bold text-lg">☕</span>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Cafe Admin UI Demo</h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Thiết kế UI/UX mới cho webadmin</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">Online</span>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">Demo Mode</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Welcome Section -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cafe-500 via-cafe-600 to-cafe-700 p-8 text-white shadow-2xl mb-8">
+            <div class="absolute inset-0 bg-black/10"></div>
+            <div class="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
+            <div class="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full translate-y-16 -translate-x-16"></div>
+            
+            <div class="relative z-10">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                        <span class="text-2xl">✨</span>
+                    </div>
+                    <div>
+                        <h2 class="text-3xl font-bold">Chào mừng đến với Cafe Admin!</h2>
+                        <p class="text-cafe-100 text-lg">Giao diện quản lý quán cà phê hiện đại và chuyên nghiệp</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-6 text-sm">
+                    <div class="flex items-center space-x-2">
+                        <span>🕐</span>
+                        <span>Cập nhật lần cuối: 14:30</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span>✅</span>
+                        <span>Hệ thống hoạt động bình thường</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="absolute top-4 right-4 w-24 h-24 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm animate-float">
+                <span class="text-4xl">📊</span>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Tables Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg group-hover:rotate-5 group-hover:scale-110 transition-all duration-200">
+                            <span class="text-2xl">🪑</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">
+                                4/12
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Bàn</div>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Đang sử dụng</span>
+                            <span class="font-medium text-gray-900 dark:text-white">4</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div class="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full" style="width: 33%"></div>
+                        </div>
+                        <div class="flex items-center text-xs text-blue-600">
+                            <span>📈</span>
+                            <span class="ml-1">+33% sử dụng</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orders Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg group-hover:rotate-5 group-hover:scale-110 transition-all duration-200">
+                            <span class="text-2xl">🛒</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-gray-900 dark:text-white group-hover:text-green-600 transition-colors">
+                                32
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Đơn hàng</div>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Hôm nay</span>
+                            <span class="font-medium text-gray-900 dark:text-white">245 tổng</span>
+                        </div>
+                        <div class="flex items-center text-xs text-green-600">
+                            <span>🕐</span>
+                            <span class="ml-1">Cập nhật vừa xong</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Revenue Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 text-white shadow-lg group-hover:rotate-5 group-hover:scale-110 transition-all duration-200">
+                            <span class="text-2xl">💰</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-gray-900 dark:text-white group-hover:text-yellow-600 transition-colors">
+                                1.2M
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Doanh thu</div>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Hôm nay</span>
+                            <span class="font-medium text-gray-900 dark:text-white">8.5M tổng</span>
+                        </div>
+                        <div class="flex items-center text-xs text-green-600">
+                            <span>📈</span>
+                            <span class="ml-1">+15% so với hôm qua</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-4 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg group-hover:rotate-5 group-hover:scale-110 transition-all duration-200">
+                            <span class="text-2xl">👥</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors">
+                                168
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Người dùng</div>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Khách hàng</span>
+                            <span class="font-medium text-gray-900 dark:text-white">156</span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-600 dark:text-gray-300">Nhân viên</span>
+                            <span class="font-medium text-gray-900 dark:text-white">12</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menu Grid Demo -->
+        <div class="mb-8">
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Thực đơn món ăn</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <!-- Menu Item 1 -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:border-blue-500 transition-all duration-300 group">
+                    <div class="relative h-64 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 overflow-hidden">
+                        <div class="w-full h-full flex items-center justify-center text-gray-400">
+                            <span class="text-6xl">☕</span>
+                        </div>
+                        <div class="absolute top-3 left-3">
+                            <span class="text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm bg-green-500/90 text-white border border-green-400/50">
+                                Đang bán
+                            </span>
+                        </div>
+                        <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <button class="p-2 bg-blue-600/90 text-white rounded-lg hover:bg-blue-500 transition-colors backdrop-blur-sm border border-blue-400/50">
+                                ✏️
+                            </button>
+                            <button class="p-2 bg-red-600/90 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm border border-red-400/50">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div class="space-y-1">
+                            <h3 class="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                                Cà phê đen
+                            </h3>
+                            <span class="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                Size M
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2">
+                            Cà phê đen nguyên chất, thơm ngon đậm đà
+                        </p>
+                        <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <span class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                    25.000đ
+                                </span>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Giá bán</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Menu Item 2 -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:border-blue-500 transition-all duration-300 group">
+                    <div class="relative h-64 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 overflow-hidden">
+                        <div class="w-full h-full flex items-center justify-center text-gray-400">
+                            <span class="text-6xl">🥪</span>
+                        </div>
+                        <div class="absolute top-3 left-3">
+                            <span class="text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm bg-green-500/90 text-white border border-green-400/50">
+                                Đang bán
+                            </span>
+                        </div>
+                        <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <button class="p-2 bg-blue-600/90 text-white rounded-lg hover:bg-blue-500 transition-colors backdrop-blur-sm border border-blue-400/50">
+                                ✏️
+                            </button>
+                            <button class="p-2 bg-red-600/90 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm border border-red-400/50">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div class="space-y-1">
+                            <h3 class="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                                Bánh mì sandwich
+                            </h3>
+                            <span class="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                Size L
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2">
+                            Bánh mì sandwich với thịt nướng, rau tươi và sốt đặc biệt
+                        </p>
+                        <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <span class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                    35.000đ
+                                </span>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Giá bán</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Menu Item 3 -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl hover:border-blue-500 transition-all duration-300 group">
+                    <div class="relative h-64 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 overflow-hidden">
+                        <div class="w-full h-full flex items-center justify-center text-gray-400">
+                            <span class="text-6xl">🧋</span>
+                        </div>
+                        <div class="absolute top-3 left-3">
+                            <span class="text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm bg-gray-500/90 text-white border border-gray-400/50">
+                                Tạm ngừng
+                            </span>
+                        </div>
+                        <div class="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <button class="p-2 bg-blue-600/90 text-white rounded-lg hover:bg-blue-500 transition-colors backdrop-blur-sm border border-blue-400/50">
+                                ✏️
+                            </button>
+                            <button class="p-2 bg-red-600/90 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm border border-red-400/50">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div class="space-y-1">
+                            <h3 class="font-semibold text-gray-900 dark:text-white text-lg leading-tight">
+                                Trà sữa
+                            </h3>
+                            <span class="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                                Size M
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2">
+                            Trà sữa thơm ngon với trân châu và thạch
+                        </p>
+                        <div class="pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <span class="text-2xl font-bold text-green-600 dark:text-green-400">
+                                    30.000đ
+                                </span>
+                                <div class="flex items-center space-x-1">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Giá bán</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add New Item -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden hover:shadow-xl hover:border-blue-500 transition-all duration-300 group cursor-pointer">
+                    <div class="h-64 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-200">
+                                <span class="text-white text-2xl">+</span>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                                Thêm món mới
+                            </h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                Nhấn để thêm món ăn mới
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Feature 1 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl text-white shadow-lg">
+                        <span class="text-xl">🎨</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Thiết kế hiện đại</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Giao diện đẹp và chuyên nghiệp</p>
+                    </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-300">
+                    Sử dụng các component hiện đại với animations mượt mà và color scheme chuyên nghiệp.
+                </p>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl text-white shadow-lg">
+                        <span class="text-xl">📱</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Responsive Design</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Tối ưu cho mọi thiết bị</p>
+                    </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-300">
+                    Giao diện tự động điều chỉnh cho desktop, tablet và mobile một cách hoàn hảo.
+                </p>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl text-white shadow-lg">
+                        <span class="text-xl">🌙</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Dark Mode</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Chế độ tối thân thiện</p>
+                    </div>
+                </div>
+                <p class="text-gray-600 dark:text-gray-300">
+                    Hỗ trợ chế độ tối và sáng với chuyển đổi mượt mà, bảo vệ mắt người dùng.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Demo Footer -->
+    <div class="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="text-center">
+                <div class="flex items-center justify-center space-x-2 mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-cafe-500 to-cafe-700 rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-sm">☕</span>
+                    </div>
+                    <span class="text-xl font-bold text-gray-900 dark:text-white">Cafe Admin</span>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Giao diện quản lý quán cà phê hiện đại và chuyên nghiệp
+                </p>
+                <div class="flex items-center justify-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span>✨ Thiết kế hiện đại</span>
+                    <span>📱 Responsive</span>
+                    <span>🌙 Dark Mode</span>
+                    <span>⚡ Nhanh chóng</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface UseSocketReturn {
   socket: Socket | null;
@@ -53,6 +53,10 @@ export const useSocket = (): UseSocketReturn => {
       });
 
       setSocket(newSocket);
+    } else {
+      // Mock connection for demo
+      console.log('🔌 Socket.IO mock connection - no user logged in');
+      setIsConnected(true);
     }
 
     return () => {

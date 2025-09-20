@@ -2,21 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom CSS Variables for Theme */
+@layer base {
+  * {
+    @apply border-gray-200 dark:border-gray-800;
+  }
+  
+  body {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm transition-all duration-200;
+  }
+  
+  .card-hover {
+    @apply hover:shadow-lg hover:-translate-y-1 cursor-pointer;
+  }
+  
+  .hover-lift {
+    @apply hover:shadow-xl hover:-translate-y-2 transition-all duration-300;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+  }
+  
+  .animate-gradient {
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+}
+
+/* Custom CSS Variables for Theme - Green, White, Black */
 :root {
-  --primary: 59 130 246; /* blue-500 */
+  --primary: 34 197 94; /* green-500 */
   --primary-foreground: 255 255 255;
-  --secondary: 241 245 249; /* slate-100 */
+  --secondary: 248 250 252; /* slate-50 */
   --secondary-foreground: 15 23 42; /* slate-900 */
-  --accent: 236 72 153; /* pink-500 */
+  --accent: 34 197 94; /* green-500 */
   --accent-foreground: 255 255 255;
-  --background: 255 255 255;
+  --background: 255 255 255; /* white */
   --foreground: 15 23 42; /* slate-900 */
-  --card: 255 255 255;
-  --card-foreground: 15 23 42;
+  --card: 255 255 255; /* white */
+  --card-foreground: 15 23 42; /* slate-900 */
   --border: 226 232 240; /* slate-200 */
-  --input: 226 232 240;
-  --ring: 59 130 246;
+  --input: 226 232 240; /* slate-200 */
+  --ring: 34 197 94; /* green-500 */
+  --muted: 248 250 252; /* slate-50 */
+  --muted-foreground: 100 116 139; /* slate-500 */
+  --destructive: 239 68 68; /* red-500 */
+  --destructive-foreground: 255 255 255;
+  --popover: 255 255 255; /* white */
+  --popover-foreground: 15 23 42; /* slate-900 */
   --radius: 0.5rem;
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -24,24 +109,30 @@
 }
 
 .dark {
-  --primary: 59 130 246;
+  --primary: 34 197 94; /* green-500 */
   --primary-foreground: 255 255 255;
   --secondary: 30 41 59; /* slate-800 */
   --secondary-foreground: 248 250 252; /* slate-50 */
-  --accent: 236 72 153;
+  --accent: 34 197 94; /* green-500 */
   --accent-foreground: 255 255 255;
-  --background: 2 6 23; /* slate-950 */
-  --foreground: 248 250 252;
-  --card: 15 23 42; /* slate-900 */
-  --card-foreground: 248 250 252;
-  --border: 30 41 59;
-  --input: 30 41 59;
-  --ring: 59 130 246;
+  --background: 15 23 42; /* slate-900 */
+  --foreground: 248 250 252; /* slate-50 */
+  --card: 30 41 59; /* slate-800 */
+  --card-foreground: 248 250 252; /* slate-50 */
+  --border: 51 65 85; /* slate-700 */
+  --input: 51 65 85; /* slate-700 */
+  --ring: 34 197 94; /* green-500 */
+  --muted: 51 65 85; /* slate-700 */
+  --muted-foreground: 148 163 184; /* slate-400 */
+  --destructive: 239 68 68; /* red-500 */
+  --destructive-foreground: 255 255 255;
+  --popover: 30 41 59; /* slate-800 */
+  --popover-foreground: 248 250 252; /* slate-50 */
 }
 
 html, body, #root { 
-  height: 100vh; 
-  width: 100vw;
+  min-height: 100vh; 
+  width: 100%;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
@@ -50,16 +141,17 @@ html, body, #root {
 
 /* Ensure full height for main containers */
 #root > div {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
 /* Fix for Layout component */
 .layout-container {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  overflow: hidden;
 }
 
 /* Fix for main content area */
@@ -67,6 +159,9 @@ html, body, #root {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  height: 100vh;
 }
 
 /* Smooth scrolling */
@@ -283,6 +378,56 @@ html {
   
   .mobile-full {
     width: 100%;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) {
+  .layout-container {
+    display: flex;
+    flex-direction: row;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    width: calc(100% - 16rem); /* 16rem = 256px sidebar width */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Ensure proper spacing on tablet screens */
+  .main-content main {
+    padding: 1rem 1.5rem;
+    width: 100%;
+    margin: 0;
+  }
+}
+
+/* Laptop/Desktop optimizations */
+@media (min-width: 1024px) {
+  .main-content {
+    width: calc(100% - 18rem); /* 18rem = 288px sidebar width */
+  }
+  
+  /* Ensure proper spacing on larger screens */
+  .main-content main {
+    padding: 1.5rem 2rem;
+    width: 100%;
+    margin: 0;
+  }
+}
+
+/* Ultra-wide screen optimizations */
+@media (min-width: 1536px) {
+  .main-content main {
+    padding: 2rem 3rem;
+  }
+}
+
+/* Large screen optimizations */
+@media (min-width: 1280px) {
+  .main-content main {
+    padding: 1.5rem 2.5rem;
   }
 }
 

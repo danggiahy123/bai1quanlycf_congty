@@ -1,2 +1,2518 @@
-import React from 'react'; 
-export default function App() { return React.createElement('div', null, 'Hello World'); } 
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { Dialog } from '@headlessui/react';
+import { PencilSquareIcon, TrashIcon, PlusIcon, BuildingStorefrontIcon } from '@heroicons/react/24/outline';
+import { Toaster, toast } from 'react-hot-toast';
+import AuthSimple from './components/AuthSimple';
+import PaymentsAdmin from './components/PaymentsAdmin';
+// import DepositPaymentModal from './components/DepositPaymentModal';
+import TransactionHistory from './components/TransactionHistory';
+import InventoryManagement from './components/InventoryManagement';
+import Dashboard from './components/Dashboard';
+import SimpleDashboard from './components/SimpleDashboard';
+// import MenuList from './components/MenuList'; // Component không tồn tại
+import InventoryDashboard from './components/InventoryDashboard';
+import StockCheck from './components/StockCheck';
+import ImportExport from './components/ImportExport';
+import SimpleInventory from './components/SimpleInventory';
+import SimpleStockManagement from './components/SimpleStockManagement';
+import Layout from './components/Layout';
+import { useSocket } from './hooks/useSocket';
+
+type TableHistoryEntry = {
+  _id: string;
+  tableId: string;
+  tableName: string;
+  action: 'OCCUPIED' | 'FREED' | 'PAID' | 'BOOKING_CONFIRMED' | 'BOOKING_CANCELLED';
+  performedBy: string; // User ID
+  performedByName: string; // User Full Name
+  customerName?: string;
+  bookingId?: string;
+  amount?: number;
+  createdAt: string;
+};
+
+type Ingredient = {
+  ingredientId: string;
+  ingredientName: string;
+  quantity: number;
+  unit: string;
+};
+
+type Menu = {
+  _id: string;
+  name: string;
+  price: number;
+  image?: string;
+  note?: string;
+  available?: boolean;
+  size?: string;
+  category?: string;
+  ingredients?: Ingredient[];
+};
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// Axios interceptor để xử lý lỗi 401
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Xóa token và user khỏi localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Reload trang để quay về màn hình đăng nhập
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
+const emptyForm: Omit<Menu, '_id'> = {
+  name: '',
+  price: 0,
+  image: '',
+  note: '',
+  available: true,
+};
+
+type Employee = {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  role: string;
+};
+
+export default function App() {
+  const [user, setUser] = useState<Employee | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'menu' | 'tables' | 'employees' | 'customers' | 'payments' | 'inventory' | 'stock' | 'import-export' | 'transactions'>('dashboard');
+  const [items, setItems] = useState<Menu[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Omit<Menu, '_id'>>(emptyForm);
+  const [q, setQ] = useState('');
+  const [stats, setStats] = useState<{pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  
+  // Socket.IO hook
+  const { socket, isConnected } = useSocket();
+
+  // Kiểm tra token trong localStorage khi khởi động
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    console.log('🔧 Loading from localStorage - Token:', savedToken ? 'Present' : 'Missing');
+    console.log('🔧 Loading from localStorage - User:', savedUser ? 'Present' : 'Missing');
+    if (savedToken && savedUser) {
+      setToken(savedToken);
+      setUser(JSON.parse(savedUser));
+      console.log('🔧 Token and user loaded from localStorage');
+    }
+  }, []);
+
+  // Socket.IO real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTableStatusChange = (data: any) => {
+      console.log('🔄 Table status changed:', data);
+      toast.success(`Bàn ${data.tableName} đã ${data.status === 'occupied' ? 'được đặt' : 'trống'}`);
+      // Refresh tables data if on tables page
+      if (currentPage === 'tables') {
+        loadTables();
+      }
+    };
+
+    const handleBookingStatusChange = (data: any) => {
+      console.log('📅 Booking status changed:', data);
+      toast.success(`Booking ${data.bookingId} đã ${data.status}`);
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleBookingCreated = (data: any) => {
+      console.log('📅 New booking created:', data);
+      toast.info(`Có đặt bàn mới: Bàn ${data.tableName} - ${data.customerName}`);
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleOrderStatusChange = (data: any) => {
+      console.log('🛒 Order status changed:', data);
+      toast.success(`Đơn hàng bàn ${data.tableName} đã ${data.status}`);
+      // Refresh orders data if on payments page
+      if (currentPage === 'payments') {
+        loadPayments();
+      }
+    };
+
+    const handlePaymentStatusChange = (data: any) => {
+      console.log('💳 Payment status changed:', data);
+      toast.success(`Thanh toán bàn ${data.tableName} thành công: ${data.amount?.toLocaleString()}đ`);
+      // Refresh payments data
+      if (currentPage === 'payments') {
+        loadPayments();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleNewNotification = (data: any) => {
+      console.log('🔔 New notification:', data);
+      toast.info(data.title || 'Thông báo mới');
+    };
+
+    const handleDepositBookingCreated = (data: any) => {
+      console.log('💰 New deposit booking created:', data);
+      toast(`💰 ${data.message} - Bàn ${data.tableName}`, {
+        icon: '⚠️',
+        style: {
+          background: '#fbbf24',
+          color: '#1f2937',
+        },
+      });
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handlePaymentConfirmed = (data: any) => {
+      console.log('💳 Payment confirmed:', data);
+      toast.success(`💳 Thanh toán cọc ${data.amount?.toLocaleString()}đ cho bàn ${data.tableName} đã được xác nhận`);
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleManualPaymentConfirmed = (data: any) => {
+      console.log('💰 Manual payment confirmed:', data);
+      toast.success(`💰 ${data.message}`, {
+        icon: '✅',
+        style: {
+          background: '#10B981',
+          color: 'white',
+        },
+      });
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    const handleQrPaymentConfirmed = (data: any) => {
+      console.log('📱 QR payment confirmed:', data);
+      toast.success(`📱 ${data.message}`, {
+        icon: '📱',
+        style: {
+          background: '#3B82F6',
+          color: 'white',
+        },
+      });
+      // Refresh bookings data if on bookings page
+      if (currentPage === 'bookings') {
+        loadBookings();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
+    // Listen for real-time events
+    socket.on('table_status_changed', handleTableStatusChange);
+    socket.on('booking_status_changed', handleBookingStatusChange);
+    socket.on('booking_created', handleBookingCreated);
+    socket.on('deposit_booking_created', handleDepositBookingCreated);
+    socket.on('payment_confirmed', handlePaymentConfirmed);
+    socket.on('manual_payment_confirmed', handleManualPaymentConfirmed);
+    socket.on('qr_payment_confirmed', handleQrPaymentConfirmed);
+    socket.on('order_status_changed', handleOrderStatusChange);
+    socket.on('payment_status_changed', handlePaymentStatusChange);
+    socket.on('new_notification', handleNewNotification);
+
+    return () => {
+      socket.off('table_status_changed', handleTableStatusChange);
+      socket.off('booking_status_changed', handleBookingStatusChange);
+      socket.off('booking_created', handleBookingCreated);
+      socket.off('deposit_booking_created', handleDepositBookingCreated);
+      socket.off('payment_confirmed', handlePaymentConfirmed);
+      socket.off('manual_payment_confirmed', handleManualPaymentConfirmed);
+      socket.off('qr_payment_confirmed', handleQrPaymentConfirmed);
+      socket.off('order_status_changed', handleOrderStatusChange);
+      socket.off('payment_status_changed', handlePaymentStatusChange);
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [socket, currentPage]);
+
+  const handleLogin = (employee: Employee, authToken: string) => {
+    console.log('🔧 Login successful:', employee);
+    console.log('🔧 Token received:', authToken ? 'Present' : 'Missing');
+    setUser(employee);
+    setToken(authToken);
+    localStorage.setItem('token', authToken);
+    localStorage.setItem('user', JSON.stringify(employee));
+    console.log('🔧 Token saved to localStorage');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  const filtered = useMemo(() => {
+    if (!Array.isArray(items)) return [];
+    if (!q.trim()) return items;
+    return items.filter((x) => `${x.name} ${x.note ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  }, [items, q]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await axios.get<{data: Menu[], pagination: any}>(`${API}/api/menu`);
+      console.log('Menu API response:', res.data);
+      if (Array.isArray(res.data.data)) {
+        setItems(res.data.data);
+      } else {
+        console.error('API returned non-array data:', res.data);
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading menu:', error);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await axios.get<{pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}>(`${API}/api/bookings/stats`);
+      setStats(res.data);
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    loadStats();
+  }, []);
+
+  // Auto refresh stats every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadStats();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Nếu chưa đăng nhập, hiển thị màn hình đăng nhập
+  if (!user || !token) {
+    return <AuthSimple onLogin={handleLogin} />;
+  }
+
+  function startCreate() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOpen(true);
+  }
+
+  function startEdit(row: Menu) {
+    setEditingId(row._id);
+    setForm({
+      name: row.name,
+      price: row.price,
+      image: row.image || '',
+      note: row.note || '',
+      available: row.available ?? true,
+    });
+    setOpen(true);
+  }
+
+  async function save() {
+    try {
+      if (editingId) {
+        await axios.put(`${API}/api/menu/${editingId}`, form);
+        toast.success('Cập nhật món thành công!');
+      } else {
+        await axios.post(`${API}/api/menu`, form);
+        toast.success('Thêm món mới thành công!');
+      }
+      setOpen(false);
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Có lỗi xảy ra');
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Xóa món này?')) return;
+    try {
+      await axios.delete(`${API}/api/menu/${id}`);
+      toast.success('Xóa món thành công!');
+      await load();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Có lỗi xảy ra');
+    }
+  }
+
+
+  return (
+    <div className="min-h-screen">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      
+      <Layout 
+        currentPage={currentPage} 
+        onPageChange={setCurrentPage}
+        notifications={notifications}
+      >
+        {console.log('🔧 App render:', { currentPage, token: token ? 'Present' : 'Missing', user: user ? 'Present' : 'Missing' })}
+        {currentPage==='dashboard' ? (
+          <SimpleDashboard />
+        ) : currentPage==='menu' ? (
+          <div className="space-y-6 h-full">
+            {/* Header with search and add button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0 gap-3 sm:gap-4">
+              <div className="flex-1 max-w-md">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm món ăn..."
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-800 dark:border-green-600 dark:text-white"
+                />
+              </div>
+              <button
+                onClick={startCreate}
+                className="inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base"
+              >
+                <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
+                <span className="hidden sm:inline">Thêm món mới</span>
+                <span className="sm:hidden">Thêm món</span>
+              </button>
+            </div>
+
+            {/* Menu Grid */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mb-4"></div>
+                <p className="text-gray-500 text-lg">Đang tải thực đơn...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6">
+                {filtered.map((m) => (
+                  <div key={m._id} className="bg-green-50 dark:bg-green-900 rounded-xl border border-green-200 dark:border-green-700 shadow-lg overflow-hidden hover:shadow-xl hover:border-green-500 transition-all duration-300 group">
+                    {/* Image Container */}
+                    <div className="relative h-48 sm:h-56 lg:h-64 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-700 dark:to-green-800 overflow-hidden">
+                      {m.image ? (
+                        <img
+                          src={m.image.startsWith('http') ? m.image : `${API}${m.image}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          alt={m.name}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-green-400">
+                          <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                      
+                      {/* Status Badge */}
+                      <div className="absolute top-3 left-3">
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full font-medium backdrop-blur-sm ${
+                            m.available 
+                              ? 'bg-green-500/90 text-white border border-green-400/50' 
+                              : 'bg-gray-500/90 text-white border border-gray-400/50'
+                          }`}
+                        >
+                          {m.available ? 'Đang bán' : 'Tạm ngừng'}
+                        </span>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <button 
+                          onClick={() => startEdit(m)} 
+                          className="p-2 bg-blue-600/90 text-white rounded-lg hover:bg-blue-500 transition-colors backdrop-blur-sm border border-blue-400/50"
+                          title="Chỉnh sửa"
+                        >
+                          <PencilSquareIcon className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => remove(m._id)} 
+                          className="p-2 bg-red-600/90 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm border border-red-400/50"
+                          title="Xóa"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+                      {/* Name and Size */}
+                      <div className="space-y-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white text-base sm:text-lg leading-tight line-clamp-1">
+                          {m.name}
+                        </h3>
+                        {m.size && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                            {m.size}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      {m.note && (
+                        <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2">
+                          {m.note}
+                        </p>
+                      )}
+
+                      {/* Price */}
+                      <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                            {m.price.toLocaleString()}đ
+                          </span>
+                          <div className="flex items-center space-x-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Giá bán</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!filtered.length && (
+                  <div className="col-span-full flex flex-col items-center justify-center py-16">
+                    <svg className="w-20 h-20 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    <h3 className="text-xl font-semibold text-gray-500 mb-2">Chưa có món ăn nào</h3>
+                    <p className="text-gray-400 text-center max-w-md">
+                      Hãy thêm món ăn đầu tiên để bắt đầu quản lý thực đơn của bạn
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : currentPage==='tables' ? (
+          <TablesAdmin />
+        ) : currentPage==='employees' ? (
+          <EmployeesAdmin />
+        ) : currentPage==='customers' ? (
+          <CustomersAdmin />
+        ) : currentPage==='payments' ? (
+          <PaymentsAdmin />
+        ) : currentPage==='inventory' ? (
+          <SimpleStockManagement API={API} token={token} />
+        ) : currentPage==='stock' ? (
+          <StockCheck API={API} token={token} />
+        ) : currentPage==='import-export' ? (
+          <ImportExport API={API} token={token} />
+        ) : currentPage==='transactions' ? (
+          <TransactionHistory API={API} />
+        ) : (
+          <BookingsAdmin stats={stats} onStatsChange={setStats} token={token} />
+        )}
+      </Layout>
+
+      <Dialog open={open} onClose={() => setOpen(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-2xl bg-green-50 dark:bg-gray-800 p-6 space-y-6 shadow-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
+                <BuildingStorefrontIcon className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <Dialog.Title className="text-xl font-bold text-gray-900 dark:text-white">
+                  {editingId ? 'Sửa món ăn' : 'Thêm món ăn mới'}
+                </Dialog.Title>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {editingId ? 'Cập nhật thông tin món ăn' : 'Thêm món ăn mới vào thực đơn'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-green-700 dark:text-gray-300 mb-2">
+                  Tên món ăn *
+                </label>
+                <input
+                  className="w-full px-4 py-3 rounded-lg border border-green-300 dark:border-green-600 focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-700 dark:text-white transition-all duration-200"
+                  placeholder="Nhập tên món ăn..."
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-green-700 dark:text-gray-300 mb-2">
+                  Giá bán (VND) *
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-4 py-3 rounded-lg border border-green-300 dark:border-green-600 focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-700 dark:text-white transition-all duration-200"
+                  placeholder="0"
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-green-700 dark:text-gray-300 mb-2">
+                  Trạng thái
+                </label>
+                <select
+                  className="w-full px-4 py-3 rounded-lg border border-green-300 dark:border-green-600 focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-700 dark:text-white transition-all duration-200"
+                  value={form.available ? '1' : '0'}
+                  onChange={(e) => setForm((f) => ({ ...f, available: e.target.value === '1' }))}
+                >
+                  <option value="1">Đang bán</option>
+                  <option value="0">Tạm ngừng</option>
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-green-700 dark:text-gray-300 mb-2">
+                  Link ảnh
+                </label>
+                <input
+                  className="w-full px-4 py-3 rounded-lg border border-green-300 dark:border-green-600 focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-700 dark:text-white transition-all duration-200"
+                  placeholder="https://... hoặc /uploads/xxx.jpg"
+                  value={form.image}
+                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-green-700 dark:text-gray-300 mb-2">
+                  Mô tả món ăn
+                </label>
+                <textarea
+                  className="w-full px-4 py-3 rounded-lg border border-green-300 dark:border-green-600 focus:ring-2 focus:ring-green-500 focus:border-transparent dark:bg-green-700 dark:text-white transition-all duration-200 resize-none"
+                  rows={3}
+                  placeholder="Mô tả chi tiết về món ăn..."
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button 
+                onClick={() => setOpen(false)} 
+                className="px-6 py-3 rounded-lg border border-green-300 dark:border-green-600 text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-700 hover:bg-green-100 dark:hover:bg-green-600 transition-all duration-200 font-medium"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={save} 
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+              >
+                {editingId ? 'Cập nhật' : 'Thêm món'}
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+// --- Employees Admin ---
+type EmployeeData = { 
+  _id: string; 
+  username: string; 
+  fullName: string; 
+  email: string; 
+  role: 'admin'|'staff'; 
+  isActive: boolean;
+  createdAt: string;
+};
+
+function EmployeesAdmin() {
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const [employees, setEmployees] = useState<EmployeeData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Omit<EmployeeData, '_id' | 'createdAt'>>({
+    username: '',
+    fullName: '',
+    email: '',
+    role: 'staff',
+    isActive: true
+  });
+  const [password, setPassword] = useState('');
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await axios.get<EmployeeData[]>(`${API}/api/employees`);
+      setEmployees(res.data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startCreate() {
+    setEditingId(null);
+    setForm({
+      username: '',
+      fullName: '',
+      email: '',
+      role: 'staff',
+      isActive: true
+    });
+    setPassword('');
+    setOpen(true);
+  }
+
+  function startEdit(emp: EmployeeData) {
+    setEditingId(emp._id);
+    setForm({
+      username: emp.username,
+      fullName: emp.fullName,
+      email: emp.email,
+      role: emp.role,
+      isActive: emp.isActive
+    });
+    setPassword('');
+    setOpen(true);
+  }
+
+  async function save() {
+    try {
+      if (editingId) {
+        // Cập nhật nhân viên
+        await axios.put(`${API}/api/employees/${editingId}`, form);
+      } else {
+        // Tạo nhân viên mới
+        await axios.post(`${API}/api/employees/register`, {
+          ...form,
+          password: password
+        });
+      }
+      setOpen(false);
+      await load();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Có lỗi xảy ra');
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Xóa nhân viên này?')) return;
+    try {
+      await axios.delete(`${API}/api/employees/${id}`);
+      await load();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Có lỗi xảy ra');
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <button onClick={startCreate} className="ml-auto inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
+          <PlusIcon className="w-5 h-5" /> Thêm nhân viên
+        </button>
+      </div>
+
+      {loading ? <div>Đang tải...</div> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {employees.map(emp => (
+            <div key={emp._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-white">{emp.fullName}</div>
+                  <div className="text-sm text-gray-300">@{emp.username}</div>
+                  <div className="text-sm text-gray-400">{emp.email}</div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded ${emp.role==='admin'?'bg-purple-600 text-purple-100':'bg-red-600 text-red-100'}`}>
+                  {emp.role==='admin'?'Quản lý':'Nhân viên'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <button onClick={() => startEdit(emp)} className="px-3 py-1.5 rounded-md border border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Sửa</button>
+                <button onClick={() => remove(emp._id)} className="ml-auto p-2 rounded hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+                  <TrashIcon className="w-5 h-5 text-red-400" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {!employees.length && <div className="text-gray-400">Không có nhân viên nào.</div>}
+        </div>
+      )}
+
+      <Dialog open={open} onClose={() => setOpen(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
+            <Dialog.Title className="text-lg font-semibold">{editingId ? 'Sửa nhân viên' : 'Thêm nhân viên'}</Dialog.Title>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm">Tên đăng nhập</label>
+                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.username} onChange={e=>setForm(f=>({ ...f, username: e.target.value }))} placeholder="Nhập tên đăng nhập" />
+              </div>
+              <div>
+                <label className="text-sm">Họ và tên</label>
+                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.fullName} onChange={e=>setForm(f=>({ ...f, fullName: e.target.value }))} placeholder="Nhập họ và tên" />
+              </div>
+              <div>
+                <label className="text-sm">Email</label>
+                <input type="email" className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.email} onChange={e=>setForm(f=>({ ...f, email: e.target.value }))} placeholder="Nhập email" />
+              </div>
+              <div>
+                <label className="text-sm">Vai trò</label>
+                <select className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.role} onChange={e=>setForm(f=>({ ...f, role: e.target.value as 'admin'|'staff' }))}>
+                  <option value="staff">Nhân viên</option>
+                  <option value="admin">Quản lý</option>
+                </select>
+              </div>
+              {!editingId && (
+                <div>
+                  <label className="text-sm">Mật khẩu</label>
+                  <input type="password" className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Nhập mật khẩu" />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">Hủy</button>
+              <button onClick={save} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">Lưu</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+// --- Customers Admin ---
+type CustomerData = { 
+  _id: string; 
+  username: string; 
+  fullName: string; 
+  email: string; 
+  phone: string;
+  address: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type CustomerStats = {
+  totalCustomers: number;
+  newToday: number;
+  newThisMonth: number;
+};
+
+function CustomersAdmin() {
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const [customers, setCustomers] = useState<CustomerData[]>([]);
+  const [stats, setStats] = useState<CustomerStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  async function loadCustomers() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: '10',
+        search: search
+      });
+      
+      const res = await axios.get<{
+        customers: CustomerData[];
+        pagination: { current: number; pages: number; total: number };
+      }>(`${API}/api/customers?${params}`);
+      
+      setCustomers(res.data.customers);
+      setTotalPages(res.data.pagination.pages);
+      setTotal(res.data.pagination.total);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await axios.get<CustomerStats>(`${API}/api/customers/stats`);
+      setStats(res.data);
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  useEffect(() => { 
+    loadCustomers();
+    loadStats();
+  }, [currentPage, search]);
+
+  const handleSearch = (value: string) => {
+    setSearch(value);
+    setCurrentPage(1);
+  };
+
+  return (
+    <div>
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Tổng khách hàng</p>
+                <p className="text-2xl font-bold text-white">{stats.totalCustomers}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Hôm nay</p>
+                <p className="text-2xl font-bold text-white">{stats.newToday}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Tháng này</p>
+                <p className="text-2xl font-bold text-white">{stats.newThisMonth}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          placeholder="Tìm kiếm khách hàng..."
+          className="flex-1 rounded-md border-green-300 focus:border-green-500 focus:ring-green-500"
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+        <div className="text-sm text-gray-400">
+          Tổng: {total} khách hàng
+        </div>
+      </div>
+
+      {/* Customers List */}
+      {loading ? (
+        <div className="text-center py-8">Đang tải...</div>
+      ) : (
+        <div className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-700">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Khách hàng</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Thông tin liên hệ</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Ngày đăng ký</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-800 divide-y divide-gray-600">
+                {customers.map((customer) => (
+                  <tr key={customer._id} className="hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-white">{customer.fullName}</div>
+                        <div className="text-sm text-gray-400">@{customer.username}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-white">{customer.email}</div>
+                      {customer.phone && (
+                        <div className="text-sm text-gray-400">{customer.phone}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                      {new Date(customer.createdAt).toLocaleDateString('vi-VN')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        customer.isActive 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {customer.isActive ? 'Hoạt động' : 'Không hoạt động'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between border-t border-gray-600 sm:px-6">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-4 py-2 border border-gray-500 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+                >
+                  Trước
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-green-300 text-sm font-medium rounded-md text-green-700 bg-green-50 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Sau
+                </button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-green-700">
+                    Trang <span className="font-medium">{currentPage}</span> / <span className="font-medium">{totalPages}</span>
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-500 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      Trước
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-500 bg-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      Sau
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {customers.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              Không có khách hàng nào.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+// --- Bookings Admin ---
+type BookingData = {
+  _id: string;
+  customer?: {
+    _id: string;
+    fullName: string;
+    email: string;
+    phone: string;
+  } | null;
+  customerInfo?: {
+    fullName: string;
+    email: string;
+    phone: string;
+  };
+  table: {
+    _id: string;
+    name: string;
+  };
+  numberOfGuests: number;
+  bookingDate: string;
+  bookingTime: string;
+  menuItems: Array<{
+    item: {
+      _id: string;
+      name: string;
+      price: number;
+    };
+    quantity: number;
+    price: number;
+  }>;
+  totalAmount: number;
+  depositAmount?: number;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  notes?: string;
+  confirmedBy?: {
+    _id: string;
+    fullName: string;
+  };
+  confirmedAt?: string;
+  createdAt: string;
+};
+
+type BookingStats = {
+  pending: number;
+  confirmed: number;
+  todayConfirmed: number;
+  thisMonthConfirmed: number;
+};
+
+function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.reload();
+  };
+  const [bookings, setBookings] = useState<BookingData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [lastBookingCount, setLastBookingCount] = useState(0);
+  const [showNewBookingAlert, setShowNewBookingAlert] = useState(false);
+  const [showNewBookingForm, setShowNewBookingForm] = useState(false);
+  const [newBookingForm, setNewBookingForm] = useState({
+    customerId: '',
+    customerPhone: '',
+    tableId: '',
+    numberOfGuests: 1,
+    bookingDate: new Date().toISOString().split('T')[0],
+    bookingTime: new Date().toTimeString().slice(0, 5),
+    specialRequests: '',
+    depositAmount: ''
+  });
+  const [tables, setTables] = useState<{_id: string; name: string; status: string}[]>([]);
+  const [foundCustomer, setFoundCustomer] = useState<{_id: string; username: string; fullName: string; email: string; phone: string} | null>(null);
+  const [foundCustomers, setFoundCustomers] = useState<{_id: string; username: string; fullName: string; email: string; phone: string}[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showCustomerList, setShowCustomerList] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showDepositPaymentModal, setShowDepositPaymentModal] = useState(false);
+  const [depositPaymentData, setDepositPaymentData] = useState<{
+    tableId: string;
+    depositAmount: number;
+    bookingId: string;
+  } | null>(null);
+
+  async function loadBookings() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        status: statusFilter,
+        page: currentPage.toString(),
+        limit: '10'
+      });
+      
+      const res = await axios.get<{
+        bookings: BookingData[];
+        pagination: { current: number; pages: number; total: number };
+      }>(`${API}/api/bookings/admin?${params}`);
+      
+      // Check for new bookings
+      const newBookingCount = res.data.bookings.length;
+      if (lastBookingCount > 0 && newBookingCount > lastBookingCount) {
+        setShowNewBookingAlert(true);
+        setTimeout(() => setShowNewBookingAlert(false), 5000); // Hide after 5 seconds
+      }
+      setLastBookingCount(newBookingCount);
+      
+      setBookings(res.data.bookings);
+      setTotalPages(res.data.pagination.pages);
+      setTotal(res.data.pagination.total);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await axios.get<BookingStats>(`${API}/api/bookings/stats`);
+      onStatsChange(res.data);
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  async function loadTables() {
+    try {
+      const res = await axios.get(`${API}/api/tables`);
+      setTables(res.data);
+    } catch (error) {
+      console.error('Error loading tables:', error);
+    }
+  }
+
+  // Chọn khách hàng cụ thể từ danh sách
+  function selectCustomer(customer: {_id: string; username: string; fullName: string; email: string; phone: string}) {
+    console.log('👤 Customer selected:', customer);
+    setFoundCustomer(customer);
+    setFoundCustomers([]);
+    setShowCustomerList(false);
+    setNewBookingForm(prev => ({
+      ...prev,
+      customerId: customer._id,
+      customerPhone: customer.phone
+    }));
+  }
+
+  // Tìm kiếm khách hàng theo SĐT
+  async function searchCustomerByPhone(phone: string) {
+    console.log('🔍 searchCustomerByPhone called with:', phone, 'length:', phone?.length);
+    
+    if (!phone || phone.length < 8) {
+      console.log('❌ Phone too short or empty, skipping search');
+      setFoundCustomer(null);
+      return;
+    }
+
+    console.log('🔍 Searching for customer with phone:', phone);
+    setSearching(true);
+    try {
+      const url = `${API}/api/bookings/search-customers?phone=${encodeURIComponent(phone)}`;
+      console.log('📡 Calling API:', url);
+      
+      const res = await axios.get(url);
+      const customers = res.data.customers || [];
+      
+      console.log('✅ API response:', res.data);
+      console.log('📋 Found customers:', customers);
+      
+      if (customers.length > 0) {
+        if (customers.length === 1) {
+          // Chỉ có 1 khách hàng
+          const customer = customers[0];
+          console.log('👤 Selected customer (single):', customer);
+          setFoundCustomer(customer);
+          setFoundCustomers([]);
+          setShowCustomerList(false);
+          setNewBookingForm(prev => ({
+            ...prev,
+            customerId: customer._id,
+            customerPhone: customer.phone
+          }));
+        } else {
+          // Có nhiều khách hàng trùng SĐT - hiển thị danh sách lựa chọn
+          console.log('⚠️ Multiple customers found with same phone:', customers.length);
+          setFoundCustomers(customers);
+          setFoundCustomer(null);
+          setShowCustomerList(true);
+          setNewBookingForm(prev => ({
+            ...prev,
+            customerId: '',
+            customerPhone: phone
+          }));
+        }
+      } else {
+        console.log('❌ No customers found');
+        setFoundCustomer(null);
+        setFoundCustomers([]);
+        setShowCustomerList(false);
+        setNewBookingForm(prev => ({
+          ...prev,
+          customerId: '',
+          customerPhone: phone
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error searching customer by phone:', error);
+      setFoundCustomer(null);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  const depositOptions = [
+    { label: '50.000đ', value: '50000' },
+    { label: '100.000đ', value: '100000' },
+    { label: '200.000đ', value: '200000' },
+    { label: '500.000đ', value: '500000' }
+  ];
+
+  const handleDepositSelect = (amount) => {
+    setNewBookingForm(prev => ({ ...prev, depositAmount: amount }));
+    setShowDepositModal(false);
+  };
+
+  const handleDepositClear = () => {
+    setNewBookingForm(prev => ({ ...prev, depositAmount: '' }));
+    setShowDepositModal(false);
+  };
+
+  async function createNewBooking() {
+    if (!newBookingForm.customerPhone.trim()) {
+      toast.error('Vui lòng nhập số điện thoại');
+      return;
+    }
+    if (!newBookingForm.tableId) {
+      toast.error('Vui lòng chọn bàn');
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API}/api/bookings/admin-quick-booking`, newBookingForm);
+      
+      // Kiểm tra xem có phải khách hàng có sẵn trong hệ thống không
+      const isExistingCustomer = newBookingForm.customerId;
+      
+      if (isExistingCustomer && foundCustomer) {
+        toast.success(`🎉 Đặt bàn thành công! Khách hàng ${foundCustomer.fullName} sẽ nhận được thông báo qua app.`);
+      } else {
+        toast.success('Tạo booking thành công!');
+      }
+      
+      // Nếu có số tiền cọc, hiển thị modal thanh toán cọc
+      const depositAmount = parseInt(newBookingForm.depositAmount) || 0;
+      if (depositAmount > 0) {
+        setDepositPaymentData({
+          tableId: newBookingForm.tableId,
+          depositAmount: depositAmount,
+          bookingId: res.data.booking._id
+        });
+        setShowDepositPaymentModal(true);
+      }
+      
+      setShowNewBookingForm(false);
+      setNewBookingForm({
+        customerId: '',
+        customerPhone: '',
+        tableId: '',
+        numberOfGuests: 1,
+        bookingDate: new Date().toISOString().split('T')[0],
+        bookingTime: new Date().toTimeString().slice(0, 5),
+        specialRequests: '',
+        depositAmount: ''
+      });
+      setFoundCustomer(null);
+      loadBookings();
+      loadStats();
+    } catch (error: any) {
+      console.error('Error creating booking:', error);
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra khi tạo booking');
+    }
+  }
+
+  useEffect(() => { 
+    loadBookings();
+    loadStats();
+  }, [statusFilter, currentPage]);
+
+  useEffect(() => {
+    if (showNewBookingForm) {
+      loadTables();
+    }
+  }, [showNewBookingForm]);
+
+
+  // Auto refresh bookings every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadBookings();
+      loadStats();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [statusFilter, currentPage]);
+
+  const handleConfirm = async (bookingId: string) => {
+    if (!token) {
+      toast.error('Vui lòng đăng nhập lại');
+      return;
+    }
+
+    const booking = bookings.find(b => b._id === bookingId);
+    if (!booking) {
+      toast.error('Không tìm thấy booking');
+      return;
+    }
+
+    // Xác nhận trực tiếp không cần chọn phương thức thanh toán
+    await confirmBooking(bookingId, 'cash');
+  };
+
+  const confirmBooking = async (bookingId: string, method: 'cash' | 'bank_transfer') => {
+    console.log('🔧 Confirming booking:', bookingId, 'with method:', method);
+    console.log('🔧 Token:', token ? 'Present' : 'Missing');
+    console.log('🔧 API URL:', API);
+
+    // Hiển thị loading toast
+    const loadingToast = toast.loading('⏳ Đang xác nhận booking...');
+
+    try {
+      const booking = bookings.find(b => b._id === bookingId);
+      const depositAmount = booking?.depositAmount || 0;
+      
+      console.log('🔧 Booking found:', booking);
+      console.log('🔧 Deposit amount:', depositAmount);
+      
+      const res = await axios.post(`${API}/api/bookings/${bookingId}/confirm`, {
+        depositAmount: depositAmount,
+        paymentMethod: method
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      console.log('✅ Confirm response:', res.data);
+      
+      // Đóng loading toast
+      toast.dismiss(loadingToast);
+      
+      if (res.data.message) {
+        toast.success('✅ Xác nhận booking thành công!', {
+          duration: 4000,
+          style: {
+            background: '#10B981',
+            color: 'white',
+            fontWeight: 'bold',
+          },
+        });
+        loadBookings();
+        loadStats();
+      } else {
+        toast.error('❌ Phản hồi không hợp lệ từ server', {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      }
+    } catch (error: any) {
+      console.error('❌ Confirm error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
+      // Đóng loading toast
+      toast.dismiss(loadingToast);
+      
+      // Xử lý lỗi token hết hạn
+      if (error.response?.status === 401) {
+        toast.error('🔐 Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', {
+          duration: 5000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+        handleLogout();
+        return;
+      }
+      
+      if (error.response?.status === 400) {
+        toast.error(`❌ ${error.response.data.message || 'Dữ liệu không hợp lệ'}`, {
+          duration: 4000,
+          style: {
+            background: '#F59E0B',
+            color: 'white',
+          },
+        });
+      } else if (error.response?.status === 404) {
+        toast.error('❌ Không tìm thấy booking', {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        toast.error('🌐 Lỗi kết nối. Vui lòng kiểm tra mạng và thử lại.', {
+          duration: 5000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      } else {
+        toast.error(`❌ ${error.response?.data?.message || 'Có lỗi xảy ra khi xác nhận booking'}`, {
+          duration: 4000,
+          style: {
+            background: '#EF4444',
+            color: 'white',
+          },
+        });
+      }
+    }
+  };
+
+  const handleCancel = async (bookingId: string) => {
+    if (!token) {
+      toast.error('Vui lòng đăng nhập lại');
+      return;
+    }
+
+    const reason = prompt('Lý do hủy booking:');
+    if (reason === null) return;
+
+    console.log('Cancelling booking:', bookingId);
+    console.log('Token:', token);
+    console.log('API URL:', API);
+
+    try {
+      const res = await axios.post(`${API}/api/bookings/${bookingId}/cancel`, 
+        { reason }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      console.log('Cancel response:', res.data);
+      
+      if (res.data.message) {
+        toast.success('Hủy booking thành công!');
+        loadBookings();
+        loadStats();
+      }
+    } catch (error: any) {
+      console.error('Cancel error:', error);
+      console.error('Error response:', error.response?.data);
+      
+      // Xử lý lỗi token hết hạn
+      if (error.response?.status === 401) {
+        toast.error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        handleLogout();
+        return;
+      }
+      
+      toast.error(error.response?.data?.message || 'Có lỗi xảy ra');
+    }
+  };
+
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'completed': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Chờ xác nhận';
+      case 'confirmed': return 'Đã xác nhận';
+      case 'cancelled': return 'Đã hủy';
+      case 'completed': return 'Hoàn thành';
+      default: return status;
+    }
+  };
+
+  return (
+    <div>
+      {/* New Booking Alert */}
+      {showNewBookingAlert && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Có booking mới! Vui lòng kiểm tra.</span>
+          <button 
+            onClick={() => setShowNewBookingAlert(false)}
+            className="ml-2 text-white hover:text-gray-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Chờ xác nhận</p>
+                <p className="text-2xl font-bold text-white">{stats.pending}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Đã xác nhận</p>
+                <p className="text-2xl font-bold text-white">{stats.confirmed}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Hôm nay</p>
+                <p className="text-2xl font-bold text-white">{stats.todayConfirmed}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-300">Tháng này</p>
+                <p className="text-2xl font-bold text-white">{stats.thisMonthConfirmed}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter */}
+      <div className="flex items-center gap-4 mb-4">
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+          className="rounded-md border-green-300 focus:border-green-500 focus:ring-green-500"
+        >
+          <option value="pending">Chờ xác nhận</option>
+          <option value="confirmed">Đã xác nhận</option>
+          <option value="cancelled">Đã hủy</option>
+          <option value="completed">Hoàn thành</option>
+          <option value="all">Tất cả</option>
+        </select>
+        <button
+          onClick={() => {
+            loadBookings();
+            loadStats();
+          }}
+          className="px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+        >
+          🔄 Làm mới
+        </button>
+        <button
+          onClick={() => setShowNewBookingForm(true)}
+          className="px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+        >
+          ➕ Tạo booking mới
+        </button>
+        <div className="text-sm text-gray-400">
+          Tổng: {total} booking
+        </div>
+      </div>
+
+      {/* Bookings List */}
+      {loading ? (
+        <div className="text-center py-8">Đang tải...</div>
+      ) : (
+        <div className="space-y-4">
+          {bookings.map((booking) => (
+            <div key={booking._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-white">
+                      {booking.customer?.fullName || booking.customerInfo?.fullName || 'Khách hàng'}
+                    </h3>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                      {getStatusText(booking.status)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-300">
+                    <div>
+                      <span className="font-medium">Bàn:</span> {booking.table?.name || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Số người:</span> {booking.numberOfGuests}
+                    </div>
+                    {booking.depositAmount > 0 && (
+                      <div>
+                        <span className="font-medium">💰 Cọc:</span> {booking.depositAmount.toLocaleString()}đ
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-medium">Ngày:</span> {new Date(booking.bookingDate).toLocaleDateString('vi-VN')}
+                    </div>
+                    <div>
+                      <span className="font-medium">Giờ:</span> {booking.bookingTime}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold text-red-600">
+                    {booking.totalAmount.toLocaleString()}đ
+                  </div>
+                  {booking.depositAmount > 0 && (
+                    <div className="text-sm font-medium text-green-600">
+                      💰 Cọc: {booking.depositAmount.toLocaleString()}đ
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-400">
+                    {new Date(booking.createdAt).toLocaleString('vi-VN')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Menu Items */}
+              <div className="mb-4">
+                <h4 className="font-medium text-white mb-2">Món đã đặt:</h4>
+                <div className="space-y-1">
+                  {booking.menuItems.map((item, index) => (
+                    <div key={index} className="flex justify-between text-sm">
+                      <span>{item.item?.name || 'N/A'} x{item.quantity}</span>
+                      <span className="font-medium">{(item.price * item.quantity).toLocaleString()}đ</span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Tổng tiền và cọc */}
+                <div className="mt-3 pt-3 border-t border-gray-600">
+                  <div className="flex justify-between text-sm font-medium">
+                    <span>Tổng tiền món:</span>
+                    <span className="text-red-400">{booking.totalAmount.toLocaleString()}đ</span>
+                  </div>
+                  {booking.depositAmount > 0 && (
+                    <div className="flex justify-between text-sm font-medium mt-1">
+                      <span className="text-green-400">💰 Tiền cọc:</span>
+                      <span className="text-green-400">{booking.depositAmount.toLocaleString()}đ</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div className="mb-4 text-sm text-gray-300">
+                <div><span className="font-medium">Email:</span> {booking.customer?.email || booking.customerInfo?.email || 'N/A'}</div>
+                {(booking.customer?.phone || booking.customerInfo?.phone) && (
+                  <div><span className="font-medium">Phone:</span> {booking.customer?.phone || booking.customerInfo?.phone}</div>
+                )}
+              </div>
+
+              {/* Actions */}
+              {booking.status === 'pending' && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleConfirm(booking._id);
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium cursor-pointer transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="button"
+                  >
+                    ✅ Xác nhận
+                  </button>
+                  <button
+                    onClick={() => handleCancel(booking._id)}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              )}
+
+              {booking.confirmedBy && (
+                <div className="text-sm text-gray-400 mt-2">
+                  Xác nhận bởi: {booking.confirmedBy.fullName} - {new Date(booking.confirmedAt!).toLocaleString('vi-VN')}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {bookings.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              Không có booking nào.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex justify-center">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-2 border border-gray-500 rounded-md text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+            >
+              Trước
+            </button>
+            <span className="px-3 py-2 text-sm text-green-700">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 border border-gray-500 rounded-md text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+            >
+              Sau
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* New Booking Form Modal */}
+      {showNewBookingForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Tạo booking mới</h2>
+            
+            {/* Thông báo hướng dẫn */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">💡 Hướng dẫn</h3>
+                  <div className="mt-1 text-sm text-blue-700">
+                    <p>• <strong>Nhập số điện thoại</strong> để tìm kiếm khách hàng có sẵn trong hệ thống</p>
+                    <p>• Nếu tìm thấy khách hàng, họ sẽ nhận được thông báo riêng qua app</p>
+                    <p>• Nếu không tìm thấy, sẽ gửi thông báo chung cho tất cả khách hàng</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-1">
+                    Số điện thoại khách hàng *
+                  </label>
+                  <input
+                    type="tel"
+                    value={newBookingForm.customerPhone}
+                    onChange={(e) => {
+                      const phone = e.target.value;
+                      console.log('📱 Phone input changed:', phone);
+                      setNewBookingForm(prev => ({ ...prev, customerPhone: phone }));
+                      searchCustomerByPhone(phone);
+                    }}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Nhập số điện thoại để tìm kiếm khách hàng..."
+                  />
+                  
+                  {/* Hiển thị trạng thái tìm kiếm */}
+                  {searching && (
+                    <div className="mt-2 text-sm text-gray-500">Đang tìm kiếm...</div>
+                  )}
+                  
+         {/* Danh sách khách hàng trùng SĐT - Nhỏ gọn */}
+         {showCustomerList && foundCustomers.length > 0 && (
+           <div className="mt-3 bg-green-50 rounded-lg shadow-md border border-gray-200">
+             {/* Header */}
+             <div className="bg-indigo-600 px-4 py-2 rounded-t-lg">
+               <div className="flex items-center justify-between">
+                 <div className="flex items-center">
+                   <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                   </svg>
+                   <span className="text-white font-medium text-sm">Chọn khách hàng ({foundCustomers.length})</span>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setFoundCustomers([]);
+                     setShowCustomerList(false);
+                     setNewBookingForm(prev => ({
+                       ...prev,
+                       customerId: '',
+                       customerPhone: ''
+                     }));
+                   }}
+                   className="text-white hover:bg-green-50/20 rounded p-1"
+                 >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+             </div>
+             
+             {/* Customer List */}
+             <div className="p-3 max-h-48 overflow-y-auto">
+               <div className="space-y-2">
+                 {foundCustomers.map((customer, index) => (
+                   <div 
+                     key={customer._id}
+                     className="group flex items-center p-2 bg-gray-50 hover:bg-indigo-50 rounded cursor-pointer transition-colors border border-gray-200 hover:border-indigo-300"
+                     onClick={() => selectCustomer(customer)}
+                   >
+                     {/* Avatar */}
+                     <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                       <span className="text-white font-bold text-xs">
+                         {customer.fullName.charAt(0).toUpperCase()}
+                       </span>
+                     </div>
+                     
+                     {/* Info */}
+                     <div className="flex-1 min-w-0">
+                       <div className="flex items-center justify-between">
+                         <div className="min-w-0 flex-1">
+                           <h4 className="text-sm font-medium text-gray-900 truncate">
+                             {customer.fullName}
+                           </h4>
+                           <p className="text-xs text-gray-500 truncate">
+                             @{customer.username}
+                           </p>
+                         </div>
+                         <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                           <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                           </svg>
+                         </div>
+                       </div>
+                       <div className="text-xs text-gray-500 truncate mt-1">
+                         {customer.email} • {customer.phone}
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* Thông tin khách hàng đã chọn - Nhỏ gọn */}
+         {foundCustomer && !showCustomerList && (
+           <div className="mt-3 bg-green-50 rounded-lg shadow-md border border-gray-200">
+             {/* Header */}
+             <div className="bg-emerald-600 px-4 py-2 rounded-t-lg">
+               <div className="flex items-center justify-between">
+                 <div className="flex items-center">
+                   <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                   </svg>
+                   <span className="text-white font-medium text-sm">Khách hàng đã chọn</span>
+                 </div>
+                 <button
+                   type="button"
+                   onClick={() => {
+                     setFoundCustomer(null);
+                     setNewBookingForm(prev => ({
+                       ...prev,
+                       customerId: '',
+                       customerPhone: ''
+                     }));
+                   }}
+                   className="text-white hover:bg-green-50/20 rounded p-1"
+                 >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+             </div>
+             
+             {/* Customer Info */}
+             <div className="p-3">
+               <div className="flex items-center">
+                 {/* Avatar */}
+                 <div className="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                   <span className="text-white font-bold text-sm">
+                     {foundCustomer.fullName.charAt(0).toUpperCase()}
+                   </span>
+                 </div>
+                 
+                 {/* Info */}
+                 <div className="flex-1 min-w-0">
+                   <h4 className="text-sm font-semibold text-gray-900 truncate">{foundCustomer.fullName}</h4>
+                   <p className="text-xs text-gray-500 truncate">@{foundCustomer.username}</p>
+                   <div className="text-xs text-gray-500 truncate mt-1">
+                     {foundCustomer.email} • {foundCustomer.phone}
+                   </div>
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
+                  
+                  {/* Thông báo không tìm thấy - Nhỏ gọn */}
+                  {!searching && newBookingForm.customerPhone && !foundCustomer && !showCustomerList && newBookingForm.customerPhone.length >= 10 && (
+                    <div className="mt-3 bg-green-50 rounded-lg shadow-md border border-gray-200">
+                      <div className="bg-amber-500 px-4 py-2 rounded-t-lg">
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 text-white mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          <span className="text-white font-medium text-sm">Không tìm thấy khách hàng</span>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <p className="text-sm text-gray-600">Sẽ gửi thông báo chung cho khách hàng mới</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-1">
+                    Chọn bàn *
+                  </label>
+                  <select
+                    value={newBookingForm.tableId}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, tableId: e.target.value }))}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Chọn bàn</option>
+                    {tables.filter(table => table.status === 'empty').map((table) => (
+                      <option key={table._id} value={table._id}>
+                        Bàn {table.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-1">
+                    Số khách *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={newBookingForm.numberOfGuests}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, numberOfGuests: parseInt(e.target.value) || 1 }))}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-1">
+                    Ngày đặt bàn *
+                  </label>
+                  <input
+                    type="date"
+                    value={newBookingForm.bookingDate}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, bookingDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-green-700 mb-1">
+                    Giờ đặt bàn *
+                  </label>
+                  <input
+                    type="time"
+                    value={newBookingForm.bookingTime}
+                    onChange={(e) => setNewBookingForm(prev => ({ ...prev, bookingTime: e.target.value }))}
+                    className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-green-700 mb-1">
+                  Yêu cầu đặc biệt
+                </label>
+                <textarea
+                  value={newBookingForm.specialRequests}
+                  onChange={(e) => setNewBookingForm(prev => ({ ...prev, specialRequests: e.target.value }))}
+                  className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  rows={3}
+                  placeholder="Nhập yêu cầu đặc biệt (nếu có)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-green-700 mb-1">
+                  Số tiền cọc (VND)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowDepositModal(true)}
+                  className="w-full px-3 py-2 border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 bg-green-50 text-left flex justify-between items-center"
+                >
+                  <span className={newBookingForm.depositAmount ? 'text-gray-900' : 'text-gray-500'}>
+                    {newBookingForm.depositAmount ? `${parseInt(newBookingForm.depositAmount).toLocaleString()}đ` : 'Chọn số tiền cọc'}
+                  </span>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {newBookingForm.depositAmount && (
+                  <button
+                    type="button"
+                    onClick={handleDepositClear}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Xóa
+                  </button>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Số tiền cọc sẽ được hiển thị trong mục thanh toán bàn
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => setShowNewBookingForm(false)}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={createNewBooking}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Tạo booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal chọn số tiền cọc */}
+      {showDepositModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-green-50 rounded-t-xl w-full max-w-md">
+            <div className="flex justify-between items-center p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Chọn số tiền cọc</h3>
+              <button
+                onClick={() => setShowDepositModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-2">
+              {depositOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleDepositSelect(option.value)}
+                  className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
+                >
+                  <span className="text-gray-900 font-medium">{option.label}</span>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
+              
+              <button
+                onClick={handleDepositClear}
+                className="w-full flex items-center justify-center p-3 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-colors"
+              >
+                <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span className="text-red-600 font-medium">Không cọc</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal thanh toán cọc */}
+      {depositPaymentData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-green-50 rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Thanh toán cọc</h3>
+            <p className="text-gray-600 mb-4">
+              Bàn {depositPaymentData.tableId} - Số tiền: {depositPaymentData.depositAmount.toLocaleString()}đ
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowDepositPaymentModal(false);
+                  setDepositPaymentData(null);
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  setShowDepositPaymentModal(false);
+                  setDepositPaymentData(null);
+                  loadBookings();
+                  loadStats();
+                  toast.success('🎉 Bàn đã được cọc thành công!');
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+// --- Tables Admin ---
+type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
+
+function TablesAdmin() {
+  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const [items, setItems] = useState<Table[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Pick<Table,'name'|'note'>>({ name: '', note: '' });
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailFor, setDetailFor] = useState<Table | null>(null);
+  const [detailOrder, setDetailOrder] = useState<{ items: { name: string; price: number; quantity: number }[] } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  
+  const [depositPaymentData, setDepositPaymentData] = useState<{
+    tableId: string;
+    depositAmount: number;
+    bookingId: string;
+  } | null>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = filter==='all' ? '' : `?status=${filter}`;
+      const res = await axios.get<Table[]>(`${API}/api/tables${qs}`);
+      setItems(res.data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [filter]);
+
+  async function create() {
+    await axios.post(`${API}/api/tables`, form);
+    setOpen(false);
+    setForm({ name: '', note: '' });
+    await load();
+  }
+
+  async function remove(id: string) {
+    if (!confirm('Xóa bàn này?')) return;
+    await axios.delete(`${API}/api/tables/${id}`);
+    await load();
+  }
+
+  async function toggle(id: string, status: 'empty'|'occupied') {
+    if (status === 'empty') {
+      // Nhận bàn
+      await axios.post(`${API}/api/tables/${id}/occupy`);
+      toast.success('Đã nhận bàn thành công!');
+    } else {
+      // Trả bàn - cần xác nhận
+      if (!confirm('Bạn có chắc chắn muốn trả bàn này? Tất cả dữ liệu món ăn/nước sẽ bị xóa!')) return;
+      
+      try {
+        const response = await axios.post(`${API}/api/tables/${id}/free`);
+        const deletedCount = response.data.deletedOrdersCount || 0;
+        toast.success(`Đã trả bàn thành công! Xóa ${deletedCount} món ăn/nước.`);
+      } catch (error) {
+        console.error('Error freeing table:', error);
+        toast.error('Có lỗi xảy ra khi trả bàn!');
+        return;
+      }
+    }
+    await load();
+  }
+
+  async function resetAllTables() {
+    const occupiedCount = items.filter(t => t.status === 'occupied').length;
+    
+    if (occupiedCount === 0) {
+      toast.info('Không có bàn nào đang được sử dụng để reset!');
+      return;
+    }
+    
+    if (!confirm(`Bạn có chắc chắn muốn trả ${occupiedCount} bàn? Tất cả dữ liệu món ăn/nước sẽ bị xóa!`)) return;
+    
+    try {
+      setLoading(true);
+      
+      // Gọi API reset tất cả bàn
+      const response = await axios.post(`${API}/api/tables/reset-all`);
+      
+      if (response.data.success) {
+        if (response.data.resetCount > 0) {
+          toast.success(`Đã trả ${response.data.resetCount} bàn thành công! Xóa ${response.data.deletedOrdersCount} món ăn/nước.`);
+        } else {
+          toast.info(response.data.message);
+        }
+        await load();
+      } else {
+        toast.error(response.data.message || 'Có lỗi xảy ra khi trả bàn!');
+      }
+    } catch (error: any) {
+      console.error('Error resetting tables:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Có lỗi xảy ra khi trả bàn!';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openDetails(t: Table) {
+    setDetailFor(t);
+    setDetailOrder(null);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const res = await axios.get(`${API}/api/orders/by-table/${t._id}`);
+      setDetailOrder(res.data || { items: [] });
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="inline-flex rounded-md border border-gray-600 overflow-hidden">
+          {(['all','empty','occupied'] as const).map(k => (
+            <button key={k} onClick={()=>setFilter(k as 'all'|'empty'|'occupied')} className={`px-3 py-1.5 rounded-md transition-colors ${filter===k?'bg-red-600 text-white':'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{k==='all'?'Tất cả':k==='empty'?'Bàn trống':'Đang dùng'}</button>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2">
+          <button 
+            onClick={resetAllTables} 
+            disabled={loading || items.filter(t => t.status === 'occupied').length === 0}
+            className="inline-flex items-center gap-2 bg-orange-600 text-white px-3 py-2 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            🔄 Trả tất cả bàn
+          </button>
+          <button onClick={()=>setOpen(true)} className="inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
+            <PlusIcon className="w-5 h-5" /> Tạo bàn
+          </button>
+        </div>
+      </div>
+
+      {loading ? <div>Đang tải...</div> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map(t => (
+            <div key={t._id} className="bg-gray-800 rounded-xl border border-gray-600 shadow-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-semibold text-white">{t.name} <span className="text-gray-400">#{t._id}</span></div>
+                  {t.note && <div className="text-sm text-gray-300">{t.note}</div>}
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded ${t.status==='empty'?'bg-green-600 text-green-100':'bg-amber-600 text-amber-100'}`}>
+                  {t.status==='empty'?'Bàn trống':'Đang dùng'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <button onClick={()=>openDetails(t)} className="px-3 py-1.5 rounded-md border border-gray-500 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">Thông tin bàn</button>
+                {t.status !== 'empty' && (
+                  <button onClick={()=>toggle(t._id, t.status)} className="px-3 py-1.5 rounded-md border border-red-500 text-red-300 hover:bg-red-600 hover:text-white transition-colors">
+                    Trả bàn
+                  </button>
+                )}
+                <button onClick={()=>remove(t._id)} className="ml-auto p-2 rounded hover:bg-gray-700 text-gray-300 hover:text-white transition-colors">
+                  <TrashIcon className="w-5 h-5 text-red-400" />
+                </button>
+              </div>
+            </div>
+          ))}
+          {!items.length && <div className="text-gray-400">Không có bàn.</div>}
+        </div>
+      )}
+
+      <Dialog open={open} onClose={()=>setOpen(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
+            <Dialog.Title className="text-lg font-semibold">Tạo bàn</Dialog.Title>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm">Tên bàn</label>
+                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.name} onChange={e=>setForm(f=>({ ...f, name: e.target.value }))} placeholder="Ví dụ: Bàn 1" />
+              </div>
+              <div>
+                <label className="text-sm">Ghi chú</label>
+                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.note ?? ''} onChange={e=>setForm(f=>({ ...f, note: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={()=>setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">Hủy</button>
+              <button onClick={create} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">Tạo</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      {/* Detail dialog */}
+      <Dialog open={detailOpen} onClose={()=>setDetailOpen(false)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-xl bg-gray-800 p-6 space-y-4">
+            <Dialog.Title className="text-lg font-semibold">Thông tin bàn {detailFor ? detailFor.name : ''} {detailFor ? `#${detailFor._id}` : ''}</Dialog.Title>
+            {detailLoading ? (
+              <div>Đang tải...</div>
+            ) : (
+              <div className="space-y-3">
+                {(detailOrder?.items?.length ?? 0) === 0 ? (
+                  <div className="text-gray-400">Chưa có món nào được order.</div>
+                ) : (
+                  <div className="divide-y">
+                    {detailOrder!.items.map((it, idx) => (
+                      <div key={idx} className="py-2 flex items-center">
+                        <div className="flex-1">{it.name}</div>
+                        <div className="w-16 text-right">x{it.quantity}</div>
+                        <div className="w-28 text-right">{(it.price * it.quantity).toLocaleString()}đ</div>
+                      </div>
+                    ))}
+                    <div className="pt-3 flex items-center font-semibold">
+                      <div className="flex-1">Tổng</div>
+                      <div className="w-16" />
+                      <div className="w-28 text-right">{detailOrder!.items.reduce((s, x)=> s + x.price*x.quantity, 0).toLocaleString()}đ</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button onClick={()=>setDetailOpen(false)} className="px-4 py-2 rounded-md border">Đóng</button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+    </div>
+  );
+}
+
+
+
+
+
+
+  
+
+
+
+
+
