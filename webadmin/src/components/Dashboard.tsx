@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  ChartBarIcon, 
+  UsersIcon, 
+  ShoppingCartIcon, 
+  CurrencyDollarIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  EyeIcon,
+  ClockIcon
+} from '@heroicons/react/24/outline';
 
 interface DashboardStats {
   totalTables: number;
