@@ -1,12 +1,12 @@
 // API Configuration
 export const FALLBACK_URLS = [
-  'http://192.168.5.117:5000', // Network IP address (for mobile)
+  'http://192.168.1.161:5000', // Network IP address (for mobile)
   'http://localhost:5000', // Local development
   'http://127.0.0.1:5000', // Local development alternative
   'http://10.0.2.2:5000' // Android emulator
 ];
 
-export const DEFAULT_API_URL = 'http://192.168.5.117:5000';
+export const DEFAULT_API_URL = 'http://192.168.1.161:5000';
 
 // Function to try API calls with fallback
 export const tryApiCall = async (endpoint: string, options: RequestInit = {}) => {

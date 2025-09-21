@@ -25,8 +25,8 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// Lấy thống kê tổng quan
-router.get('/stats', authenticateToken, async (req, res) => {
+// Lấy thống kê tổng quan (public endpoint)
+router.get('/stats', async (req, res) => {
   try {
     // Thống kê bàn
     const totalTables = await Table.countDocuments();

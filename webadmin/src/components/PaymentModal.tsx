@@ -117,7 +117,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const confirmPayment = async () => {
     try {
       // Gọi API để xác nhận thanh toán
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/orders/by-table/${tableId}/pay`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000'}/api/orders/by-table/${tableId}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

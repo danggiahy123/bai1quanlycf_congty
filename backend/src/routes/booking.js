@@ -1307,4 +1307,92 @@ router.post('/admin-quick-booking', async (req, res) => {
   }
 });
 
+// Lấy danh sách bàn đặt (cho admin)
+router.get('/booked-tables', async (req, res) => {
+  try {
+    const bookings = await Booking.find({})
+      .populate('customer', 'name phone email')
+      .populate('table', 'name')
+      .sort({ createdAt: -1 });
+
+    const bookedTables = bookings.map(booking => ({
+      _id: booking._id,
+      table: booking.table,
+      tableName: booking.table?.name || `Bàn ${booking.table}`,
+      customer: booking.customer?._id,
+      customerInfo: {
+        name: booking.customerInfo?.name || booking.customer?.name || 'N/A',
+        phone: booking.customerInfo?.phone || booking.customer?.phone || 'N/A',
+        email: booking.customerInfo?.email || booking.customer?.email
+      },
+      bookingDate: booking.bookingDate,
+      bookingTime: booking.bookingTime,
+      depositAmount: booking.depositAmount || 0,
+      status: booking.status || 'pending',
+      createdAt: booking.createdAt,
+      confirmedAt: booking.confirmedAt,
+      notes: booking.notes
+    }));
+
+    res.json({
+      success: true,
+      data: bookedTables
+    });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách bàn đặt:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Xác nhận đặt bàn
+router.post('/:id/confirm', authenticateToken, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    booking.status = 'confirmed';
+    booking.confirmedAt = new Date();
+    await booking.save();
+
+    // Cập nhật trạng thái bàn
+    await Table.findByIdAndUpdate(booking.table, { status: 'reserved' });
+
+    res.json({
+      success: true,
+      message: 'Đã xác nhận đặt bàn'
+    });
+  } catch (error) {
+    console.error('Lỗi xác nhận booking:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+// Hủy đặt bàn
+router.post('/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy booking' });
+    }
+
+    booking.status = 'cancelled';
+    await booking.save();
+
+    // Cập nhật trạng thái bàn
+    await Table.findByIdAndUpdate(booking.table, { status: 'available' });
+
+    res.json({
+      success: true,
+      message: 'Đã hủy đặt bàn'
+    });
+  } catch (error) {
+    console.error('Lỗi hủy booking:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
 module.exports = router;

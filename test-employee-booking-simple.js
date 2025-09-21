@@ -1,4 +1,4 @@
-const API_URL = 'http://192.168.5.117:5000';
+const API_URL = 'http://192.168.1.161:5000';
 
 // Thông tin admin test
 const adminCredentials = {

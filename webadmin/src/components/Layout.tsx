@@ -17,7 +17,8 @@ import {
   ClipboardDocumentListIcon,
   UserCircleIcon,
   BuildingStorefrontIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  CalendarIcon
 } from '@heroicons/react/24/outline';
 import { useSocket } from '../hooks/useSocket';
 import { Badge } from './ui/Badge';
@@ -132,6 +133,14 @@ const Layout: React.FC<LayoutProps> = ({
       color: 'text-green-700',
       gradient: 'from-green-700 to-green-800',
       description: 'Quản lý thanh toán'
+    },
+    { 
+      id: 'booked-tables', 
+      name: 'Bàn đặt', 
+      icon: CalendarIcon, 
+      color: 'text-green-600',
+      gradient: 'from-green-600 to-green-700',
+      description: 'Quản lý bàn đặt cọc'
     },
     { 
       id: 'inventory', 

@@ -16,6 +16,8 @@ import StockCheck from './components/StockCheck';
 import ImportExport from './components/ImportExport';
 import SimpleInventory from './components/SimpleInventory';
 import SimpleStockManagement from './components/SimpleStockManagement';
+import BookedTables from './components/BookedTables';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { useSocket } from './hooks/useSocket';
 
@@ -51,7 +53,7 @@ type Menu = {
   ingredients?: Ingredient[];
 };
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API = import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000';
 
 // Axios interceptor để xử lý lỗi 401
 axios.interceptors.response.use(
@@ -235,6 +237,25 @@ export default function App() {
       loadStats();
     };
 
+    const handleBookingDeposit = (data: any) => {
+      console.log('💰 Booking deposit notification:', data);
+      toast.success(`💰 ${data.title}`, {
+        icon: '💰',
+        style: {
+          background: '#F59E0B',
+          color: 'white',
+        },
+        duration: 5000,
+      });
+      // Refresh booked tables if on booked-tables page
+      if (currentPage === 'booked-tables') {
+        // Trigger refresh of booked tables
+        window.location.reload();
+      }
+      // Refresh stats
+      loadStats();
+    };
+
     // Listen for real-time events
     socket.on('table_status_changed', handleTableStatusChange);
     socket.on('booking_status_changed', handleBookingStatusChange);
@@ -246,6 +267,7 @@ export default function App() {
     socket.on('order_status_changed', handleOrderStatusChange);
     socket.on('payment_status_changed', handlePaymentStatusChange);
     socket.on('new_notification', handleNewNotification);
+    socket.on('booking_deposit', handleBookingDeposit);
 
     return () => {
       socket.off('table_status_changed', handleTableStatusChange);
@@ -258,6 +280,7 @@ export default function App() {
       socket.off('order_status_changed', handleOrderStatusChange);
       socket.off('payment_status_changed', handlePaymentStatusChange);
       socket.off('new_notification', handleNewNotification);
+      socket.off('booking_deposit', handleBookingDeposit);
     };
   }, [socket, currentPage]);
 
@@ -550,6 +573,10 @@ export default function App() {
           <CustomersAdmin />
         ) : currentPage==='payments' ? (
           <PaymentsAdmin />
+        ) : currentPage==='booked-tables' ? (
+          <ErrorBoundary>
+            <BookedTables />
+          </ErrorBoundary>
         ) : currentPage==='inventory' ? (
           <SimpleStockManagement API={API} token={token} />
         ) : currentPage==='stock' ? (
@@ -690,7 +717,7 @@ type EmployeeData = {
 };
 
 function EmployeesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000';
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -877,7 +904,7 @@ type CustomerStats = {
 };
 
 function CustomersAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000';
   const [customers, setCustomers] = useState<CustomerData[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1155,7 +1182,7 @@ type BookingStats = {
 };
 
 function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number} | null; onStatsChange: (stats: {pending: number; confirmed: number; todayConfirmed: number; thisMonthConfirmed: number}) => void; token: string | null }) {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000';
   
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -2277,7 +2304,7 @@ function BookingsAdmin({ stats, onStatsChange, token }: { stats: {pending: numbe
 type Table = { _id: string; name: string; status: 'empty'|'occupied'; note?: string };
 
 function TablesAdmin() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  const API = import.meta.env.VITE_API_URL || 'http://192.168.1.161:5000';
   const [items, setItems] = useState<Table[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all'|'empty'|'occupied'>('all');
@@ -2287,6 +2314,7 @@ function TablesAdmin() {
   const [detailFor, setDetailFor] = useState<Table | null>(null);
   const [detailOrder, setDetailOrder] = useState<{ items: { name: string; price: number; quantity: number }[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   
   const [depositPaymentData, setDepositPaymentData] = useState<{
     tableId: string;
@@ -2308,10 +2336,24 @@ function TablesAdmin() {
   useEffect(() => { load(); }, [filter]);
 
   async function create() {
-    await axios.post(`${API}/api/tables`, form);
-    setOpen(false);
-    setForm({ name: '', note: '' });
-    await load();
+    try {
+      if (!form.name.trim()) {
+        toast.error('Vui lòng nhập tên bàn');
+        return;
+      }
+      
+      setCreating(true);
+      const response = await axios.post(`${API}/api/tables`, form);
+      toast.success('🎉 Tạo bàn thành công!');
+      setOpen(false);
+      setForm({ name: '', note: '' });
+      await load();
+    } catch (error: any) {
+      console.error('Error creating table:', error);
+      toast.error(error.response?.data?.error || 'Lỗi tạo bàn');
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function remove(id: string) {
@@ -2406,8 +2448,14 @@ function TablesAdmin() {
           >
             🔄 Trả tất cả bàn
           </button>
-          <button onClick={()=>setOpen(true)} className="inline-flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700">
-            <PlusIcon className="w-5 h-5" /> Tạo bàn
+          <button 
+            onClick={()=>setOpen(true)} 
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white px-4 py-2.5 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Tạo Bàn Mới
           </button>
         </div>
       </div>
@@ -2443,23 +2491,113 @@ function TablesAdmin() {
       )}
 
       <Dialog open={open} onClose={()=>setOpen(false)} className="relative z-50">
-        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
         <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="mx-auto w-full max-w-md rounded-xl bg-gray-800 p-6 space-y-4">
-            <Dialog.Title className="text-lg font-semibold">Tạo bàn</Dialog.Title>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm">Tên bàn</label>
-                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.name} onChange={e=>setForm(f=>({ ...f, name: e.target.value }))} placeholder="Ví dụ: Bàn 1" />
+          <Dialog.Panel className="mx-auto w-full max-w-lg rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 p-8 shadow-2xl border border-gray-700">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
               </div>
-              <div>
-                <label className="text-sm">Ghi chú</label>
-                <input className="mt-1 w-full rounded-md border-green-300 focus:border-green-500 focus:ring-green-500" value={form.note ?? ''} onChange={e=>setForm(f=>({ ...f, note: e.target.value }))} />
-              </div>
+              <Dialog.Title className="text-2xl font-bold text-white mb-2">Tạo Bàn Mới</Dialog.Title>
+              <p className="text-gray-400">Thêm bàn mới vào hệ thống quản lý</p>
             </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={()=>setOpen(false)} className="px-4 py-2 rounded-md border border-gray-500 text-gray-300 bg-gray-700 hover:bg-gray-600">Hủy</button>
-              <button onClick={create} className="px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700">Tạo</button>
+
+            {/* Form */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  Tên bàn <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <input 
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" 
+                    value={form.name} 
+                    onChange={e=>setForm(f=>({ ...f, name: e.target.value }))} 
+                    placeholder="Ví dụ: Bàn VIP 1, Bàn cửa sổ 2..." 
+                    autoFocus
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  Ghi chú
+                </label>
+                <div className="relative">
+                  <textarea 
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none" 
+                    value={form.note ?? ''} 
+                    onChange={e=>setForm(f=>({ ...f, note: e.target.value }))} 
+                    placeholder="Mô tả đặc điểm bàn (ví dụ: Phòng riêng, có máy lạnh, wifi mạnh...)"
+                    rows={3}
+                  />
+                  <div className="absolute top-3 right-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview */}
+              {form.name && (
+                <div className="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">Xem trước:</h4>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">
+                        {form.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">{form.name}</div>
+                      <div className="text-gray-400 text-sm">
+                        {form.note || 'Chưa có ghi chú'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-4 pt-6">
+              <button 
+                onClick={()=>setOpen(false)} 
+                className="px-6 py-3 rounded-lg border border-gray-600 text-gray-300 bg-gray-700 hover:bg-gray-600 transition-all duration-200 font-medium"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={create} 
+                disabled={!form.name.trim() || creating}
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {creating ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Đang tạo...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Tạo Bàn</span>
+                  </>
+                )}
+              </button>
             </div>
           </Dialog.Panel>
         </div>

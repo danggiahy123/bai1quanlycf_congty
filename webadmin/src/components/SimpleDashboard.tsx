@@ -266,7 +266,7 @@ const SimpleDashboard: React.FC = () => {
           <button
             onClick={() => {
               console.log('🧪 Testing API connection...');
-              fetch('http://localhost:3001/api/dashboard/stats')
+              fetch('http://192.168.1.161:5000/api/dashboard/stats')
                 .then(res => res.json())
                 .then(data => {
                   console.log('✅ Direct API test success:', data);

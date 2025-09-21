@@ -463,10 +463,44 @@ router.post('/confirm-payment', async (req, res) => {
     await transaction.save();
     console.log('✅ Đã tạo giao dịch thanh toán thành công:', transaction._id);
 
-    // TẠM THỜI ẨN: Gửi thông báo cho admin khi có cọc (QR code hoặc Facebook)
-    // Thông báo sẽ chỉ được gửi khi admin thực sự xác nhận cọc
+    // Gửi thông báo cho admin khi có cọc thành công
     if (transactionType === 'deposit') {
-      console.log('✅ Đã lưu giao dịch cọc, KHÔNG gửi thông báo cho admin - chờ admin xác nhận');
+      try {
+        // Tạo thông báo cho admin
+        const adminNotification = new Notification({
+          user: null, // null = thông báo cho admin
+          type: 'booking_deposit',
+          title: '💰 KHÁCH HÀNG ĐÃ CỌC BÀN',
+          message: `Khách hàng ${booking.customerInfo?.name || 'N/A'} đã cọc ${amount.toLocaleString()}đ cho bàn ${booking.table}. Vui lòng xác nhận!`,
+          bookingId: booking._id,
+          tableId: booking.table,
+          customerId: booking.customer,
+          isRead: false,
+          priority: 'high'
+        });
+        
+        await adminNotification.save();
+        console.log('✅ Đã gửi thông báo cọc bàn cho admin');
+        
+        // Gửi thông báo real-time qua Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+          io.to('admins').emit('new_notification', {
+            id: adminNotification._id,
+            type: 'booking_deposit',
+            title: adminNotification.title,
+            message: adminNotification.message,
+            bookingId: booking._id,
+            tableId: booking.table,
+            customerId: booking.customer,
+            timestamp: new Date(),
+            priority: 'high'
+          });
+          console.log('📡 Đã gửi thông báo real-time cho admin');
+        }
+      } catch (notificationError) {
+        console.error('Lỗi gửi thông báo cho admin:', notificationError);
+      }
     } else {
       console.log('✅ Đã lưu giao dịch thanh toán, chờ admin xác nhận');
     }
